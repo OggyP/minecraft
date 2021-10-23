@@ -1,5 +1,15 @@
-# C++ SFML Grapher
+# Minecraft in C++ and OpenGL
 
-#  How to use this
+This is a bad minecraft clone and my first OpenGL application I have made that wasn't from a tutorial.
 
-This program is a quadratic graphing program that has full mouse and scroll wheel movement and zoom. To create a quadratic right click three points on screen and the program will create a quadratic that passes through all of the points.
+## Controls
+
+The controls are the same as minecraft's controls.
+
+> Use the mouse to look around.
+> WASD to move around.
+
+## To do
+
+> I am yet to add mining (I will soon)
+> Figure out how to compile for Windows
