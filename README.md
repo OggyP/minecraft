@@ -7,9 +7,11 @@ This is a bad minecraft clone and my first OpenGL application I have made that w
 The controls are the same as minecraft's controls.
 
 > Use the mouse to look around.
+
 > WASD to move around.
 
 ## To do
 
 > I am yet to add mining (I will soon)
+
 > Figure out how to compile for Windows
