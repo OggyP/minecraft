@@ -48,13 +48,13 @@
     {
       "name": "Win32",
       "intelliSenseMode": "gcc-x86",
-      "compilerPath": "/usr/bin/x86_64-w64-mingw32-g++-win32",
+      "compilerPath": "C:/mingw32/bin/gcc.exe",
       "includePath": [
         "${workspaceFolder}/src",
         "${workspaceFolder}/lib",
         "${workspaceFolder}/test",
         "C:/SFML-2.5.1/include",
-        "/usr/include/x86_64-linux-gnu/c++/10"
+        "C:/include"
       ],
       "defines": [
         "_DEBUG",
