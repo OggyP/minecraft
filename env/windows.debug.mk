@@ -5,4 +5,6 @@ LINK_LIBRARIES := \
 	sfml-window-d \
 	sfml-system-d \
 	stdc++fs \
-	gdi32
+	gdi32 \
+	glew32 \
+	opengl32

@@ -10,7 +10,7 @@ MAKEFLAGS += --no-print-directory --verbose
 SHELL := /bin/sh
 
 # Build platform
-PLATFORM?=linux
+PLATFORM?=windows
 # Build description (Primarily uses Debug/Release)
 BUILD?=Release
 _BUILDL := $(shell echo $(BUILD) | tr A-Z a-z)
