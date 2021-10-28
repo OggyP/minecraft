@@ -24,7 +24,7 @@
 // # define M_SQRT2	1.41421356237309504880	/* sqrt(2) */
 // # define M_SQRT1_2	0.70710678118654752440	/* 1/sqrt(2) */
 
-int screenSize[2] = { 1900, 1000 };
+int screenSize[2] = { 1000, 1000 };
 float position[3] = { 0.0f, 0.0f, 150.0f };
 Vector3f wantToLook;
 Vector3f lookingAt;
@@ -224,7 +224,7 @@ void renderingThread(sf::Window* window)
 
 	GLint uniView = glGetUniformLocation(sceneShaderProgram, "view");
 
-	glm::mat4 proj = glm::perspective(glm::radians(90.0f), (float)screenSize[0] / screenSize[1], 0.1f, 100.0f);
+	glm::mat4 proj = glm::perspective(glm::radians(90.0f), (float)screenSize[0] / screenSize[1], 0.0001f, 100.0f);
 	GLint uniProj = glGetUniformLocation(sceneShaderProgram, "proj");
 	glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
 
@@ -331,7 +331,8 @@ void renderingThread(sf::Window* window)
 		frames++;
 		auto now = std::chrono::high_resolution_clock::now();
 		float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - startTime).count();
-		std::cout << "Frames: " << frames / timeDiff << "\n";
+		UNUSED(timeDiff);
+		// std::cout << "Frames: " << frames / timeDiff << "\n";
 	}
 
 	// close
@@ -459,11 +460,42 @@ void chunkGenThread()
 int previousChunkCollide[2] = { 0, 0 };
 GameChunk* savedChunk;
 bool chunkIsLoaded = false;
-bool willCollide(float x, float y, float z);
-bool willCollide(float x, float y, float z)
+
+/**
+ * World collision check
+ *
+ * @param[in] x float world coordinate
+ * @param[in] y float world coordinate
+ * @param[in] z float world coordinate
+ *
+ * @return Boolean value, true if that point is NOT inside of a block. False if the chunk has not been generated.
+ */
+bool pointCollided(float x, float y, float z);
+bool pointCollided(float x, float y, float z)
 {
-	const int currentChunk[2] = { (int)floor(x / chunkSize), (int)floor(y / chunkSize) };
-	const int currentBlock[3] = { (int)floor((int)x % chunkSize), (int)floor((int)y % chunkSize), (int)floor((int)z - 1) };
+	int currentChunk[2] = { (int)floor(x / chunkSize), (int)floor(y / chunkSize) };
+	int currentBlock[3] = { (int)floor((int)floor(x) % chunkSize), (int)floor((int)floor(y) % chunkSize), (int)floor(z - 1) };
+	// std::cout << "Chunk S5T" << currentChunk[0] << '|' << currentChunk[1] << " Block: " << currentBlock[0] << '|' << currentBlock[1] << '|' << currentBlock[2] << std::endl;
+
+	// if (x < 0)
+	// {
+	// 	currentChunk[0]--;
+	// }
+
+	// if (y < 0)
+	// {
+	// 	currentChunk[0]--;
+	// }
+
+	if (currentBlock[0] < 0)
+	{
+		currentBlock[0] += chunkSize;
+	}
+
+	if (currentBlock[1] < 0)
+	{
+		currentBlock[1] += chunkSize;
+	}
 
 	if (previousChunkCollide[0] != currentChunk[0] || previousChunkCollide[1] != currentChunk[1] || chunksLoaded)
 	{
@@ -479,6 +511,8 @@ bool willCollide(float x, float y, float z)
 					if (chunkYitr->first == currentChunk[1])
 					{
 						savedChunk = &chunkYitr->second;
+						previousChunkCollide[0] = currentChunk[0];
+						previousChunkCollide[1] = currentChunk[1];
 						chunkIsLoaded = true;
 						newChunkLoaded = true;
 					}
@@ -495,6 +529,7 @@ bool willCollide(float x, float y, float z)
 		}
 		ChunkMapMutex.unlock();
 	}
+	std::cout << "Chunk " << currentChunk[0] << '|' << currentChunk[1] << " Block: " << currentBlock[0] << '|' << currentBlock[1] << '|' << currentBlock[2] << std::endl;
 	if (chunkIsLoaded)
 	{
 		if (savedChunk->tiles[currentBlock[0]][currentBlock[1]][currentBlock[2]] == 0)
@@ -506,9 +541,8 @@ bool willCollide(float x, float y, float z)
 			return false;
 		}
 	}
-	previousChunkCollide[0] = currentChunk[0];
-	previousChunkCollide[1] = currentChunk[1];
-	return true;
+	std::cout << "Chunk not loaded\n";
+	return false;
 }
 
 int main()
@@ -536,7 +570,7 @@ int main()
 	// window.setFramerateLimit(120);
 
 	window.setActive(false);
-	window.setPosition(sf::Vector2i(0, 0));
+	window.setPosition(sf::Vector2i(900, 0));
 
 	// launch the rendering thread
 	sf::Thread renderThread(&renderingThread, &window);
@@ -552,7 +586,9 @@ int main()
 	float mouseSensitivity = 0.001;
 	float mouseSmoothing = 0.02;
 	// float mouseSmoothing = 0.0001;
-	float movementSpeed = 0.05f;
+	float movementSpeed = 0.01f;
+
+	const float playerDimensions[3] = { 0.3, 0.3, 1.8 };
 
 	// Handle all input
 	while (running)
@@ -597,78 +633,57 @@ int main()
 			lookingAt.y += (wantToLook.y - lookingAt.y) * mouseSmoothing;
 			lookingAt.z += (wantToLook.z - lookingAt.z) * mouseSmoothing;
 
+			float moveVector[3] = { 0, 0, 0 };
+
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
 			{
-				float newPos[3] = { position[0], position[1], position[2] };
-				newPos[0] += movementSpeed * cos(wantToLook.directionH);
-				newPos[1] += movementSpeed * sin(wantToLook.directionH);
-				if (willCollide(newPos[0], newPos[1], newPos[2]))
-				{
-					position[0] = newPos[0];
-					position[1] = newPos[1];
-					position[2] = newPos[2];
-				}
+				moveVector[0] += movementSpeed * cos(wantToLook.directionH);
+				moveVector[1] += movementSpeed * sin(wantToLook.directionH);
 			}
 			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
 			{
-				float newPos[3] = { position[0], position[1], position[2] };
-				newPos[0] -= movementSpeed * cos(wantToLook.directionH);
-				newPos[1] -= movementSpeed * sin(wantToLook.directionH);
-				if (willCollide(newPos[0], newPos[1], newPos[2]))
-				{
-					position[0] = newPos[0];
-					position[1] = newPos[1];
-					position[2] = newPos[2];
-				}
+				moveVector[0] -= movementSpeed * cos(wantToLook.directionH);
+				moveVector[1] -= movementSpeed * sin(wantToLook.directionH);
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
 			{
-				float newPos[3] = { position[0], position[1], position[2] };
-				newPos[0] += movementSpeed * cos(wantToLook.directionH + M_PI_2);
-				newPos[1] += movementSpeed * sin(wantToLook.directionH + M_PI_2);
-				if (willCollide(newPos[0], newPos[1], newPos[2]))
-				{
-					position[0] = newPos[0];
-					position[1] = newPos[1];
-					position[2] = newPos[2];
-				}
+				moveVector[0] += movementSpeed * cos(wantToLook.directionH + M_PI_2);
+				moveVector[1] += movementSpeed * sin(wantToLook.directionH + M_PI_2);
 			}
 			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
 			{
-				float newPos[3] = { position[0], position[1], position[2] };
-				newPos[0] -= movementSpeed * cos(wantToLook.directionH + M_PI_2);
-				newPos[1] -= movementSpeed * sin(wantToLook.directionH + M_PI_2);
-				if (willCollide(newPos[0], newPos[1], newPos[2]))
-				{
-					position[0] = newPos[0];
-					position[1] = newPos[1];
-					position[2] = newPos[2];
-				}
+				moveVector[0] -= movementSpeed * cos(wantToLook.directionH + M_PI_2);
+				moveVector[1] -= movementSpeed * sin(wantToLook.directionH + M_PI_2);
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift))
 			{
-				float newPos[3] = { position[0], position[1], position[2] };
-				newPos[2] -= movementSpeed;
-				if (willCollide(newPos[0], newPos[1], newPos[2]))
-				{
-					position[0] = newPos[0];
-					position[1] = newPos[1];
-					position[2] = newPos[2];
-				}
+				moveVector[2] -= movementSpeed;
 			}
 			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
 			{
-				float newPos[3] = { position[0], position[1], position[2] };
-				newPos[2] += movementSpeed;
-				if (willCollide(newPos[0], newPos[1], newPos[2]))
-				{
-					position[0] = newPos[0];
-					position[1] = newPos[1];
-					position[2] = newPos[2];
-				}
+				moveVector[2] += movementSpeed;
 			}
 
-			// std::cout << position[0] << '|' << position[1] << std::endl;
+			if (moveVector[0] != 0 || moveVector[1] != 0 || moveVector[2] != 0)
+				for (int i = 0; i < 3; i++)
+				{
+					float newPos[3] = { position[0], position[1], position[2] };
+					newPos[i] += moveVector[i];
+
+					bool notCollided = true;
+					for (float x = -playerDimensions[0]; x <= playerDimensions[0] && notCollided; x += 2 * playerDimensions[0])
+					{
+						for (float y = -playerDimensions[1]; y <= playerDimensions[1] && notCollided; y += 2 * playerDimensions[1])
+						{
+							for (float z = 0; z <= playerDimensions[2] && notCollided; z += playerDimensions[2])
+							{
+								notCollided = pointCollided(newPos[0] + 0.5 + x, newPos[1] + 0.5 + y, newPos[2] + z);
+							}
+						}
+					}
+					if (notCollided)
+						position[i] += moveVector[i];
+				}
 		}
 
 		sf::sleep(sf::milliseconds(1));
