@@ -33,7 +33,7 @@ bool running = true;
 bool hasFocus = true;
 
 // render distance in chunks
-const int renderDistance = 3;
+const int renderDistance = 5;
 
 float scale = 0.1;
 
@@ -251,10 +251,16 @@ void renderingThread(sf::Window* window)
 
 	// the rendering loop
 	int frames = 0;
-	auto startTime = std::chrono::high_resolution_clock::now();
 	sf::Event event;
+	auto startTime = std::chrono::high_resolution_clock::now();
+	bool showFPS = false;
 	while (running)
 	{
+		if (chunksLoaded && !showFPS)
+		{
+			startTime = std::chrono::high_resolution_clock::now();
+			showFPS = true;
+		}
 		while (window->pollEvent(event))
 		{
 			if (event.type == sf::Event::Closed)
@@ -352,11 +358,14 @@ void renderingThread(sf::Window* window)
 
 		// end the current frame -- this is a rendering function (it requires the context to be active)
 		window->display();
-		frames++;
-		auto now = std::chrono::high_resolution_clock::now();
-		float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - startTime).count();
-		UNUSED(timeDiff);
-		// std::cout << "Frames: " << frames / timeDiff << "\n";
+		if (showFPS)
+		{
+			frames++;
+			auto now = std::chrono::high_resolution_clock::now();
+			float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - startTime).count();
+			// UNUSED(timeDiff);
+			std::cout << "Frames: " << frames / timeDiff << "\n";
+		}
 	}
 
 	// close
@@ -609,7 +618,7 @@ int main()
 
 	int mouseCoord[2];
 	float mouseSensitivity = 0.001;
-	float mouseSmoothing = 30.0f;
+	float mouseSmoothing = 50.0f;
 	// float mouseSmoothing = 0.0001;
 	float movementSpeed = 5.0f;
 
@@ -622,6 +631,8 @@ int main()
 		sf::Time dt = deltaClock.restart();
 		float deltaTimeMovementSpeed = movementSpeed * (float)dt.asSeconds();
 		float deltaTimeMouseSmoothing = mouseSmoothing * (float)dt.asSeconds();
+		if (deltaTimeMouseSmoothing > 0.05f)
+			deltaTimeMouseSmoothing = 0.05f;
 
 		if (hasFocus)
 		{
