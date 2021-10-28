@@ -14,4 +14,4 @@ The controls are the same as minecraft's controls.
 
 > I am yet to add mining (I will soon)
 
-> Add good collision detection
+> Add more than one block
