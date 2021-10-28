@@ -5,7 +5,7 @@
 		processorArchitecture="ia64"
 		version="1.0.0.0"
 		type="win32" />
-	<description>My SFML Game</description>
+	<description>Crappy Minecraft by OggyP</description>
 	<trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
 		<security>
 			<requestedPrivileges>

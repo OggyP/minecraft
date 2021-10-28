@@ -570,7 +570,7 @@ int main()
 	// window.setFramerateLimit(120);
 
 	window.setActive(false);
-	window.setPosition(sf::Vector2i(900, 0));
+	window.setPosition(sf::Vector2i(0, 0));
 
 	// launch the rendering thread
 	sf::Thread renderThread(&renderingThread, &window);
@@ -589,7 +589,7 @@ int main()
 	float movementSpeed = 0.01f;
 
 	const float playerDimensions[3] = { 0.3, 0.3, 1.8 };
-
+	bool hasFocus;
 	// Handle all input
 	while (running)
 	{
