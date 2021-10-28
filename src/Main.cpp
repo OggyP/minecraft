@@ -706,12 +706,12 @@ int main()
 			if (!flying)
 			{
 				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space) && onFloor)
-					jumpHeight = 0.0015;
+					jumpHeight = 0.002;
 
 				float jumpChange = jumpHeight * jumpSpeed;
 				jumpHeight -= jumpChange;
 				verticalVector += jumpChange;
-				verticalVector -= 0.003f * dt.asSeconds();
+				verticalVector -= 0.008f * dt.asSeconds();
 			}
 			else
 			{
