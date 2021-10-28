@@ -30,9 +30,10 @@ Vector3f wantToLook;
 Vector3f lookingAt;
 
 bool running = true;
+bool hasFocus = true;
 
 // render distance in chunks
-const int renderDistance = 10;
+const int renderDistance = 3;
 
 float scale = 0.1;
 
@@ -251,8 +252,30 @@ void renderingThread(sf::Window* window)
 	// the rendering loop
 	int frames = 0;
 	auto startTime = std::chrono::high_resolution_clock::now();
+	sf::Event event;
 	while (running)
 	{
+		while (window->pollEvent(event))
+		{
+			if (event.type == sf::Event::Closed)
+				window->close();
+			else if (event.type == sf::Event::GainedFocus)
+				hasFocus = true;
+			else if (event.type == sf::Event::LostFocus)
+				hasFocus = false;
+			else if (event.type == sf::Event::Resized)
+			{
+				// update the view to the new size of the window
+				screenSize[0] = event.size.width;
+				screenSize[1] = event.size.height;
+				glViewport(0, 0, event.size.width, event.size.height);
+			}
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape) || event.type == sf::Event::Closed)
+			{
+				running = false;
+			}
+		}
+
 		glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
 		// Clear the screen to white
 		glClearColor(0.450, 0.937, 0.968, 1.0f);
@@ -562,13 +585,13 @@ int main()
 	settings.minorVersion = 2;
 	settings.attributeFlags = sf::ContextSettings::Core;
 
-	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Fullscreen | sf::Style::Resize | sf::Style::Close, settings);
+	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Resize | sf::Style::Close, settings);
 	platform.setIcon(window.getSystemHandle());
 
 	window.setMouseCursorGrabbed(true);
 	window.setMouseCursorVisible(false);
-	// window.setVerticalSyncEnabled(true);
-	// window.setFramerateLimit(120);
+	window.setVerticalSyncEnabled(true);
+	window.setFramerateLimit(60);
 
 	screenSize[0] = window.getSize().x;
 	screenSize[1] = window.getSize().y;
@@ -584,47 +607,23 @@ int main()
 	sf::Thread chunkThread(&chunkGenThread);
 	chunkThread.launch();
 
-	sf::Event event;
-
 	int mouseCoord[2];
 	float mouseSensitivity = 0.001;
-	float mouseSmoothing = 0.02;
+	float mouseSmoothing = 30.0f;
 	// float mouseSmoothing = 0.0001;
-	float movementSpeed = 0.01f;
+	float movementSpeed = 5.0f;
 
 	const float playerDimensions[3] = { 0.3, 0.3, 1.8 };
-	bool hasFocus = true;
+
 	// Handle all input
 	sf::Clock deltaClock;
 	while (running)
 	{
-		while (window.pollEvent(event))
-		{
-			if (event.type == sf::Event::Closed)
-				window.close();
-			else if (event.type == sf::Event::GainedFocus)
-				hasFocus = true;
-			else if (event.type == sf::Event::LostFocus)
-				hasFocus = false;
-			else if (event.type == sf::Event::Resized)
-			{
-				// update the view to the new size of the window
-				screenSize[0] = event.size.width;
-				screenSize[1] = event.size.height;
-
-			}
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape) || event.type == sf::Event::Closed)
-			{
-				running = false;
-				renderThread.wait();
-				chunkThread.wait();
-			}
-		}
-
 		sf::Time dt = deltaClock.restart();
-		float deltaTimeMovementSpeed = movementSpeed * dt.asMilliseconds();
+		float deltaTimeMovementSpeed = movementSpeed * (float)dt.asSeconds();
+		float deltaTimeMouseSmoothing = mouseSmoothing * (float)dt.asSeconds();
 
-		if (window.hasFocus() && hasFocus)
+		if (hasFocus)
 		{
 
 			mouseCoord[0] = sf::Mouse::getPosition(window).x;
@@ -650,9 +649,9 @@ int main()
 				sf::Mouse::setPosition(sf::Vector2i(screenSize[0] / 2, screenSize[1] / 2), window);
 			}
 
-			lookingAt.x += (wantToLook.x - lookingAt.x) * mouseSmoothing;
-			lookingAt.y += (wantToLook.y - lookingAt.y) * mouseSmoothing;
-			lookingAt.z += (wantToLook.z - lookingAt.z) * mouseSmoothing;
+			lookingAt.x += (wantToLook.x - lookingAt.x) * deltaTimeMouseSmoothing;
+			lookingAt.y += (wantToLook.y - lookingAt.y) * deltaTimeMouseSmoothing;
+			lookingAt.z += (wantToLook.z - lookingAt.z) * deltaTimeMouseSmoothing;
 
 			float moveVector[3] = { 0, 0, 0 };
 
@@ -696,7 +695,7 @@ int main()
 					{
 						for (float y = -playerDimensions[1]; y <= playerDimensions[1] && notCollided; y += 2 * playerDimensions[1])
 						{
-							for (float z = 0; z <= playerDimensions[2] && notCollided; z += playerDimensions[2])
+							for (float z = 0; z <= playerDimensions[2] && notCollided; z += playerDimensions[2] / 2)
 							{
 								notCollided = pointCollided(newPos[0] + 0.5 + x, newPos[1] + 0.5 + y, newPos[2] + z);
 							}
@@ -707,8 +706,11 @@ int main()
 				}
 		}
 
-		sf::sleep(sf::milliseconds(1));
+		// sf::sleep(sf::milliseconds(1));
 	}
+
+	renderThread.wait();
+	chunkThread.wait();
 
 	return 0;
 }

@@ -1,4 +1,10 @@
 #include <SimplexNoise.hpp>
+#include <random>
+
+std::random_device rd;
+std::mt19937 gen(rd());
+
+std::uniform_real_distribution<> distribution(1000000, 2000000);
 
 const int chunkSize = 16;
 const int chunkHeight = 256;
