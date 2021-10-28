@@ -14,4 +14,4 @@ The controls are the same as minecraft's controls.
 
 > I am yet to add mining (I will soon)
 
-> Figure out how to compile for Windows
+> Add good collision detection
