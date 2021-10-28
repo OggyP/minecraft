@@ -561,7 +561,7 @@ int main()
 	settings.minorVersion = 2;
 	settings.attributeFlags = sf::ContextSettings::Core;
 
-	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "OpenGL", sf::Style::Close, settings);
+	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Close, settings);
 	platform.setIcon(window.getSystemHandle());
 
 	// window.setMouseCursorGrabbed(true);
