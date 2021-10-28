@@ -10,6 +10,10 @@ The controls are the same as minecraft's controls.
 
 > WASD to move around.
 
+> Space to jump
+
+> C to enable / disable flying
+
 ## To do
 
 > I am yet to add mining (I will soon)

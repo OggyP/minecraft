@@ -623,6 +623,11 @@ int main()
 	float movementSpeed = 5.0f;
 
 	const float playerDimensions[3] = { 0.3, 0.3, 1.8 };
+	float verticalVector = 0;
+	bool onFloor = false;
+	float jumpHeight = 0;
+	float jumpSpeed = 0.2;
+	bool flying = false;
 
 	// Handle all input
 	sf::Clock deltaClock;
@@ -633,6 +638,8 @@ int main()
 		float deltaTimeMouseSmoothing = mouseSmoothing * (float)dt.asSeconds();
 		if (deltaTimeMouseSmoothing > 0.05f)
 			deltaTimeMouseSmoothing = 0.05f;
+
+		bool cPressed = false;
 
 		if (hasFocus)
 		{
@@ -664,7 +671,7 @@ int main()
 			lookingAt.y += (wantToLook.y - lookingAt.y) * deltaTimeMouseSmoothing;
 			lookingAt.z += (wantToLook.z - lookingAt.z) * deltaTimeMouseSmoothing;
 
-			float moveVector[3] = { 0, 0, 0 };
+			float moveVector[3] = { 0, 0, verticalVector };
 
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
 			{
@@ -686,13 +693,32 @@ int main()
 				moveVector[0] -= deltaTimeMovementSpeed * cos(wantToLook.directionH + M_PI_2);
 				moveVector[1] -= deltaTimeMovementSpeed * sin(wantToLook.directionH + M_PI_2);
 			}
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift))
+
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::C))
 			{
-				moveVector[2] -= deltaTimeMovementSpeed;
+				if (!cPressed)
+					flying = !flying;
+				cPressed = true;
 			}
-			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
+			else
+				cPressed = false;
+
+			if (!flying)
 			{
-				moveVector[2] += deltaTimeMovementSpeed;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space) && onFloor)
+					jumpHeight = 0.0015;
+
+				float jumpChange = jumpHeight * jumpSpeed;
+				jumpHeight -= jumpChange;
+				verticalVector += jumpChange;
+				verticalVector -= 0.003f * dt.asSeconds();
+			}
+			else
+			{
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
+					moveVector[2] += deltaTimeMovementSpeed;
+				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift))
+					moveVector[2] -= deltaTimeMovementSpeed;
 			}
 
 			if (moveVector[0] != 0 || moveVector[1] != 0 || moveVector[2] != 0)
@@ -714,6 +740,16 @@ int main()
 					}
 					if (notCollided)
 						position[i] += moveVector[i];
+
+					if (i == 2 && !notCollided)
+					{
+						verticalVector = 0;
+						onFloor = true;
+					}
+					else
+					{
+						onFloor = false;
+					}
 				}
 		}
 
