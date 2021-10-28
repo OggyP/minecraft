@@ -24,7 +24,7 @@
 // # define M_SQRT2	1.41421356237309504880	/* sqrt(2) */
 // # define M_SQRT1_2	0.70710678118654752440	/* 1/sqrt(2) */
 
-int screenSize[2] = { 1000, 1000 };
+int screenSize[2] = { 1680, 1050 };
 float position[3] = { 0.0f, 0.0f, 150.0f };
 Vector3f wantToLook;
 Vector3f lookingAt;
@@ -570,8 +570,11 @@ int main()
 	// window.setVerticalSyncEnabled(true);
 	// window.setFramerateLimit(120);
 
+	screenSize[0] = window.getSize().x;
+	screenSize[1] = window.getSize().y;
+
 	window.setActive(false);
-	window.setPosition(sf::Vector2i(0, 0));
+	// window.setPosition(sf::Vector2i(0, 0));
 
 	// launch the rendering thread
 	sf::Thread renderThread(&renderingThread, &window);
@@ -608,6 +611,7 @@ int main()
 				// update the view to the new size of the window
 				screenSize[0] = event.size.width;
 				screenSize[1] = event.size.height;
+
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape) || event.type == sf::Event::Closed)
 			{
