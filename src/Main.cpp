@@ -592,6 +592,7 @@ int main()
 	const float playerDimensions[3] = { 0.3, 0.3, 1.8 };
 	bool hasFocus = true;
 	// Handle all input
+	sf::Clock deltaClock;
 	while (running)
 	{
 		while (window.pollEvent(event))
@@ -615,6 +616,9 @@ int main()
 				chunkThread.wait();
 			}
 		}
+
+		sf::Time dt = deltaClock.restart();
+		float deltaTimeMovementSpeed = movementSpeed * dt.asMilliseconds();
 
 		if (window.hasFocus() && hasFocus)
 		{
@@ -650,31 +654,31 @@ int main()
 
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
 			{
-				moveVector[0] += movementSpeed * cos(wantToLook.directionH);
-				moveVector[1] += movementSpeed * sin(wantToLook.directionH);
+				moveVector[0] += deltaTimeMovementSpeed * cos(wantToLook.directionH);
+				moveVector[1] += deltaTimeMovementSpeed * sin(wantToLook.directionH);
 			}
 			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
 			{
-				moveVector[0] -= movementSpeed * cos(wantToLook.directionH);
-				moveVector[1] -= movementSpeed * sin(wantToLook.directionH);
+				moveVector[0] -= deltaTimeMovementSpeed * cos(wantToLook.directionH);
+				moveVector[1] -= deltaTimeMovementSpeed * sin(wantToLook.directionH);
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
 			{
-				moveVector[0] += movementSpeed * cos(wantToLook.directionH + M_PI_2);
-				moveVector[1] += movementSpeed * sin(wantToLook.directionH + M_PI_2);
+				moveVector[0] += deltaTimeMovementSpeed * cos(wantToLook.directionH + M_PI_2);
+				moveVector[1] += deltaTimeMovementSpeed * sin(wantToLook.directionH + M_PI_2);
 			}
 			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
 			{
-				moveVector[0] -= movementSpeed * cos(wantToLook.directionH + M_PI_2);
-				moveVector[1] -= movementSpeed * sin(wantToLook.directionH + M_PI_2);
+				moveVector[0] -= deltaTimeMovementSpeed * cos(wantToLook.directionH + M_PI_2);
+				moveVector[1] -= deltaTimeMovementSpeed * sin(wantToLook.directionH + M_PI_2);
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift))
 			{
-				moveVector[2] -= movementSpeed;
+				moveVector[2] -= deltaTimeMovementSpeed;
 			}
 			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
 			{
-				moveVector[2] += movementSpeed;
+				moveVector[2] += deltaTimeMovementSpeed;
 			}
 
 			if (moveVector[0] != 0 || moveVector[1] != 0 || moveVector[2] != 0)
