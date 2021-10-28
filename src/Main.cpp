@@ -39,6 +39,7 @@ float scale = 0.1;
 const int chunkUploadLimit = 10000000;
 
 bool chunksLoaded = false;
+bool paused = false;
 
 // map of chunks
 sf::Mutex ChunkMapMutex;
@@ -405,9 +406,9 @@ void chunkGenThread()
 				}
 			}
 			ChunkMapMutex.unlock();
-			for (int idxX = 0; idxX < 2 * renderDistance + 3; idxX++)
+			for (int idxX = 0; idxX < 2 * renderDistance + 3 && running; idxX++)
 			{
-				for (int idxY = 0; idxY < 2 * renderDistance + 3; idxY++)
+				for (int idxY = 0; idxY < 2 * renderDistance + 3 && running; idxY++)
 				{
 					if (!haveChunk[idxX][idxY])
 					{
@@ -426,9 +427,9 @@ void chunkGenThread()
 					}
 				}
 			}
-			for (int idxX = 1; idxX < 2 * renderDistance + 2; idxX++)
+			for (int idxX = 1; idxX < 2 * renderDistance + 2 && running; idxX++)
 			{
-				for (int idxY = 1; idxY < 2 * renderDistance + 2; idxY++)
+				for (int idxY = 1; idxY < 2 * renderDistance + 2 && running; idxY++)
 				{
 					if (!chunkPointers[idxX][idxY]->hasVerticies)
 					{
@@ -529,7 +530,7 @@ bool pointCollided(float x, float y, float z)
 		}
 		ChunkMapMutex.unlock();
 	}
-	std::cout << "Chunk " << currentChunk[0] << '|' << currentChunk[1] << " Block: " << currentBlock[0] << '|' << currentBlock[1] << '|' << currentBlock[2] << std::endl;
+	// std::cout << "Chunk " << currentChunk[0] << '|' << currentChunk[1] << " Block: " << currentBlock[0] << '|' << currentBlock[1] << '|' << currentBlock[2] << std::endl;
 	if (chunkIsLoaded)
 	{
 		if (savedChunk->tiles[currentBlock[0]][currentBlock[1]][currentBlock[2]] == 0)
@@ -561,11 +562,11 @@ int main()
 	settings.minorVersion = 2;
 	settings.attributeFlags = sf::ContextSettings::Core;
 
-	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Close, settings);
+	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Fullscreen | sf::Style::Resize | sf::Style::Close, settings);
 	platform.setIcon(window.getSystemHandle());
 
-	// window.setMouseCursorGrabbed(true);
-	// window.setMouseCursorVisible(false);
+	window.setMouseCursorGrabbed(true);
+	window.setMouseCursorVisible(false);
 	// window.setVerticalSyncEnabled(true);
 	// window.setFramerateLimit(120);
 
@@ -589,22 +590,34 @@ int main()
 	float movementSpeed = 0.01f;
 
 	const float playerDimensions[3] = { 0.3, 0.3, 1.8 };
-	bool hasFocus;
+	bool hasFocus = true;
 	// Handle all input
 	while (running)
 	{
-
-		if (window.hasFocus())
+		while (window.pollEvent(event))
 		{
-			while (window.pollEvent(event))
+			if (event.type == sf::Event::Closed)
+				window.close();
+			else if (event.type == sf::Event::GainedFocus)
+				hasFocus = true;
+			else if (event.type == sf::Event::LostFocus)
+				hasFocus = false;
+			else if (event.type == sf::Event::Resized)
 			{
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape) || event.type == sf::Event::Closed)
-				{
-					running = false;
-					renderThread.wait();
-					chunkThread.wait();
-				}
+				// update the view to the new size of the window
+				screenSize[0] = event.size.width;
+				screenSize[1] = event.size.height;
 			}
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape) || event.type == sf::Event::Closed)
+			{
+				running = false;
+				renderThread.wait();
+				chunkThread.wait();
+			}
+		}
+
+		if (window.hasFocus() && hasFocus)
+		{
 
 			mouseCoord[0] = sf::Mouse::getPosition(window).x;
 			mouseCoord[1] = sf::Mouse::getPosition(window).y;
