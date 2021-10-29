@@ -29,18 +29,18 @@ float position[3] = { 0.0f, 0.0f, 150.0f };
 Vector3f wantToLook;
 Vector3f lookingAt;
 
-bool running = true;
-bool hasFocus = true;
+bool gameRunning = true;
+bool windowHasFocus = true;
 
 // render distance in chunks
 const int renderDistance = 5;
+const int chunksAmt = (2 * renderDistance + 1);
 
-float scale = 0.1;
+float blockScale = 0.1;
 
-const int chunkUploadLimit = 10000000;
+const int GPUchunkUploadLimit = 10000000;
 
-bool chunksLoaded = false;
-bool paused = false;
+bool spawnChunksLoaded = false;
 
 // map of chunks
 sf::Mutex ChunkMapMutex;
@@ -234,12 +234,10 @@ void renderingThread(sf::Window* window)
 	glm::mat4 model = glm::mat4(0.1f);
 	glUniformMatrix4fv(uniModel, 1, GL_FALSE, glm::value_ptr(model));
 
-	glUniform1f(glGetUniformLocation(sceneShaderProgram, "scale"), scale);
+	glUniform1f(glGetUniformLocation(sceneShaderProgram, "scale"), blockScale);
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_FRONT);
-
-	const int chunksAmt = (2 * renderDistance + 1);
 
 	std::array<std::array<int, 3>, chunksAmt * chunksAmt> chunkIds;
 	int chunkVetexSizes[chunksAmt * chunksAmt];
@@ -250,25 +248,26 @@ void renderingThread(sf::Window* window)
 	// std::fill_n(chunkIds, chunksAmt * chunksAmt, defaultVal);
 
 	// the rendering loop
-	int frames = 0;
-	sf::Event event;
+	int totalFrameCount = 0;
 	auto startTime = std::chrono::high_resolution_clock::now();
-	bool showFPS = false;
-	while (running)
+	bool logFPStoConsole = false;
+
+	sf::Event event;
+	while (gameRunning)
 	{
-		if (chunksLoaded && !showFPS)
+		if (spawnChunksLoaded && !logFPStoConsole)
 		{
 			startTime = std::chrono::high_resolution_clock::now();
-			showFPS = true;
+			logFPStoConsole = true;
 		}
 		while (window->pollEvent(event))
 		{
 			if (event.type == sf::Event::Closed)
 				window->close();
 			else if (event.type == sf::Event::GainedFocus)
-				hasFocus = true;
+				windowHasFocus = true;
 			else if (event.type == sf::Event::LostFocus)
-				hasFocus = false;
+				windowHasFocus = false;
 			else if (event.type == sf::Event::Resized)
 			{
 				// update the view to the new size of the window
@@ -278,7 +277,7 @@ void renderingThread(sf::Window* window)
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape) || event.type == sf::Event::Closed)
 			{
-				running = false;
+				gameRunning = false;
 			}
 		}
 
@@ -295,11 +294,11 @@ void renderingThread(sf::Window* window)
 		glEnable(GL_DEPTH_TEST);
 		glUseProgram(sceneShaderProgram);
 
-		float scaledPos2[3] = { position[0] * scale, position[1] * scale, position[2] * scale };
+		float scaledPlayerPos[3] = { position[0] * blockScale, position[1] * blockScale, position[2] * blockScale };
 
 		glm::mat4 view = glm::lookAt(
-			glm::vec3(scaledPos2[0], scaledPos2[1], scaledPos2[2]),
-			glm::vec3(lookingAt.x + scaledPos2[0], lookingAt.y + scaledPos2[1], lookingAt.z + scaledPos2[2]),
+			glm::vec3(scaledPlayerPos[0], scaledPlayerPos[1], scaledPlayerPos[2]),
+			glm::vec3(lookingAt.x + scaledPlayerPos[0], lookingAt.y + scaledPlayerPos[1], lookingAt.z + scaledPlayerPos[2]),
 			glm::vec3(0.0f, 0.0f, 1.0f));
 		glUniformMatrix4fv(uniView, 1, GL_FALSE, glm::value_ptr(view));
 
@@ -309,10 +308,11 @@ void renderingThread(sf::Window* window)
 		// Draw cube
 		// Render frame
 
+		// Used to cap the max VBO uploads per frame
 		int VBOuploads = 0;
+
 		for (int i = 0; i < chunksAmt * chunksAmt; i++)
 		{
-
 			glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
 			glEnableVertexAttribArray(vboChunks[i]);
 			// x, y, draw (bool)
@@ -320,7 +320,7 @@ void renderingThread(sf::Window* window)
 			{
 				ChunkVerticiesMutex.lock();
 				int vectorSize = newVerticies.size();
-				if (vectorSize > 0 && VBOuploads < chunkUploadLimit)
+				if (vectorSize > 0 && VBOuploads < GPUchunkUploadLimit)
 				{
 					auto newChunkInfo = newVerticies[vectorSize - 1];
 					newVerticies.pop_back();
@@ -358,13 +358,13 @@ void renderingThread(sf::Window* window)
 
 		// end the current frame -- this is a rendering function (it requires the context to be active)
 		window->display();
-		if (showFPS)
+		if (logFPStoConsole)
 		{
-			frames++;
+			totalFrameCount++;
 			auto now = std::chrono::high_resolution_clock::now();
 			float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - startTime).count();
 			// UNUSED(timeDiff);
-			std::cout << "Frames: " << frames / timeDiff << "\n";
+			std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
 		}
 	}
 
@@ -383,16 +383,12 @@ void renderingThread(sf::Window* window)
 	glDeleteShader(sceneFragmentShader);
 	glDeleteShader(sceneVertexShader);
 
-	ChunkVerticiesMutex.lock();
-	for (const auto& x : bufferMap)
+	for (int i = 0; i < chunksAmt * chunksAmt; i++)
 	{
-		for (const auto& y : x.second)
-		{
-			glDeleteBuffers(1, &y.second[1]);
-			glDeleteVertexArrays(1, &y.second[0]);
-		}
+		glDeleteBuffers(1, &vboChunks[i]);
 	}
-	ChunkVerticiesMutex.unlock();
+
+	glDeleteVertexArrays(1, &vaoWorld);
 
 	newVerticies.clear();
 
@@ -407,7 +403,7 @@ void chunkGenThread()
 	bool firstLoad = true;
 	int previousChunk[2] = { 0, 0 };
 	bool updateChunks = true;
-	while (running)
+	while (gameRunning)
 	{
 		const int currentChunk[2] = { (int)floor(position[0] / chunkSize), (int)floor(position[1] / chunkSize) };
 		if ((currentChunk[0] != previousChunk[0] || currentChunk[1] != previousChunk[1]) || updateChunks)
@@ -420,8 +416,9 @@ void chunkGenThread()
 			previousChunk[0] = currentChunk[0];
 			previousChunk[1] = currentChunk[1];
 			const int chunkOffsets[2] = { -(currentChunk[0] - renderDistance) + 1, -(currentChunk[1] - renderDistance) + 1 };
-			bool haveChunk[2 * renderDistance + 3][2 * renderDistance + 3] = { 0 };
-			GameChunk* chunkPointers[2 * renderDistance + 3][2 * renderDistance + 3];
+			bool haveChunk[chunksAmt + 2][chunksAmt + 2] = { 0 };
+			GameChunk* chunkPointers[chunksAmt + 2][chunksAmt + 2];
+
 			ChunkMapMutex.lock();
 			for (chunkXitr = chunkMap.begin(); chunkXitr != chunkMap.end(); chunkXitr++)
 			{
@@ -438,9 +435,9 @@ void chunkGenThread()
 				}
 			}
 			ChunkMapMutex.unlock();
-			for (int idxX = 0; idxX < 2 * renderDistance + 3 && running; idxX++)
+			for (int idxX = 0; idxX < 2 * renderDistance + 3 && gameRunning; idxX++)
 			{
-				for (int idxY = 0; idxY < 2 * renderDistance + 3 && running; idxY++)
+				for (int idxY = 0; idxY < 2 * renderDistance + 3 && gameRunning; idxY++)
 				{
 					if (!haveChunk[idxX][idxY])
 					{
@@ -459,9 +456,9 @@ void chunkGenThread()
 					}
 				}
 			}
-			for (int idxX = 1; idxX < 2 * renderDistance + 2 && running; idxX++)
+			for (int idxX = 1; idxX < 2 * renderDistance + 2 && gameRunning; idxX++)
 			{
-				for (int idxY = 1; idxY < 2 * renderDistance + 2 && running; idxY++)
+				for (int idxY = 1; idxY < 2 * renderDistance + 2 && gameRunning; idxY++)
 				{
 					if (!chunkPointers[idxX][idxY]->hasVerticies)
 					{
@@ -483,7 +480,7 @@ void chunkGenThread()
 		if (firstLoad)
 		{
 			std::cout << "Loaded All init chunks\n";
-			chunksLoaded = true;
+			spawnChunksLoaded = true;
 		}
 		firstLoad = false;
 		sf::sleep(sf::milliseconds(1));
@@ -530,9 +527,9 @@ bool pointCollided(float x, float y, float z)
 		currentBlock[1] += chunkSize;
 	}
 
-	if (previousChunkCollide[0] != currentChunk[0] || previousChunkCollide[1] != currentChunk[1] || chunksLoaded)
+	if (previousChunkCollide[0] != currentChunk[0] || previousChunkCollide[1] != currentChunk[1] || spawnChunksLoaded)
 	{
-		chunksLoaded = false;
+		spawnChunksLoaded = false;
 		bool newChunkLoaded = false;
 		ChunkMapMutex.lock();
 		for (chunkXitr = chunkMap.begin(); chunkXitr != chunkMap.end(); chunkXitr++)
@@ -574,7 +571,7 @@ bool pointCollided(float x, float y, float z)
 			return false;
 		}
 	}
-	std::cout << "Chunk not loaded\n";
+	// std::cout << "Chunk not loaded\n";
 	return false;
 }
 
@@ -631,7 +628,7 @@ int main()
 
 	// Handle all input
 	sf::Clock deltaClock;
-	while (running)
+	while (gameRunning)
 	{
 		sf::Time dt = deltaClock.restart();
 		float deltaTimeMovementSpeed = movementSpeed * (float)dt.asSeconds();
@@ -641,7 +638,7 @@ int main()
 
 		bool cPressed = false;
 
-		if (hasFocus)
+		if (windowHasFocus)
 		{
 
 			mouseCoord[0] = sf::Mouse::getPosition(window).x;
