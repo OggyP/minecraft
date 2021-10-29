@@ -740,8 +740,15 @@ int main()
 
 					if (i == 2 && !notCollided)
 					{
-						verticalVector = 0;
-						onFloor = true;
+						if (moveVector[i] < 0)
+						{
+							verticalVector = 0;
+							onFloor = true;
+						}
+						else
+						{
+							verticalVector = 0;
+						}
 					}
 					else
 					{
