@@ -5,7 +5,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
-#include "Vector3f.hpp"
+#include "Vectors.hpp"
 #include "openGLsetup.hpp"
 #include "terrain.hpp"
 
@@ -304,7 +304,6 @@ void renderingThread(sf::Window* window)
 
 		const int currentChunk[2] = { (int)floor(position[0] / chunkSize), (int)floor(position[1] / chunkSize) };
 		const int chunkBoundaries[2][2] = { { currentChunk[0] - renderDistance, currentChunk[0] + renderDistance }, { currentChunk[1] - renderDistance, currentChunk[1] + renderDistance } };
-		// std::cout << "x1: " << chunkBoundaries[0][0] << " x2: " << chunkBoundaries[0][1] << " y1: " << chunkBoundaries[1][0] << " y2: " << chunkBoundaries[1][1] << "\n";
 		// Draw cube
 		// Render frame
 
@@ -330,7 +329,6 @@ void renderingThread(sf::Window* window)
 						chunkIds[i][2] = true;
 						chunkIds[i][0] = newChunkInfo.first[0];
 						chunkIds[i][1] = newChunkInfo.first[1];
-						// std::cout << " i: " << i << " vectorSize: " << newChunkInfo.second.size() << std::endl;
 
 						glBufferData(GL_ARRAY_BUFFER, sizeof(float) * newChunkInfo.second.size(), newChunkInfo.second.data(), GL_DYNAMIC_DRAW);
 						chunkVetexSizes[i] = newChunkInfo.second.size() / 6;
@@ -363,8 +361,8 @@ void renderingThread(sf::Window* window)
 			totalFrameCount++;
 			auto now = std::chrono::high_resolution_clock::now();
 			float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - startTime).count();
-			// UNUSED(timeDiff);
-			std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
+			UNUSED(timeDiff);
+			// std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
 		}
 	}
 
@@ -411,7 +409,6 @@ void chunkGenThread()
 			// [[lower bounds x, higher bounds x], [lower bounds y, higher bounds y]] (inclusive)
 			const int currentChunkConstraints[2][2] = { { currentChunk[0] - renderDistance, currentChunk[0] + renderDistance }, { currentChunk[1] - renderDistance, currentChunk[1] + renderDistance } };
 			const int previousChunkConstraints[2][2] = { { previousChunk[0] - renderDistance, previousChunk[0] + renderDistance }, { previousChunk[1] - renderDistance, previousChunk[1] + renderDistance } };
-			// std::cout << currentChunk[0] << '|' << currentChunk[1] << "\n";
 			updateChunks = false;
 			previousChunk[0] = currentChunk[0];
 			previousChunk[1] = currentChunk[1];
@@ -448,11 +445,6 @@ void chunkGenThread()
 						chunkMap[newChunk.chunkX].insert(std::make_pair(newChunk.chunkY, std::move(newChunk))); // insert chunk
 						chunkPointers[idxX][idxY] = &chunkMap[newChunk.chunkX][newChunk.chunkY];
 						ChunkMapMutex.unlock();
-
-						// ChunkVerticiesMutex.lock();
-						// newVerticies.push_back(std::make_pair(std::array<int, 2>({ newChunk.chunkX, newChunk.chunkY }), newChunkVerticies));
-						// ChunkVerticiesMutex.unlock();
-						// std::cout << "send new verticies" << std::endl;
 					}
 				}
 			}
@@ -489,7 +481,7 @@ void chunkGenThread()
 
 int previousChunkCollide[2] = { 0, 0 };
 GameChunk* savedChunk;
-bool chunkIsLoaded = false;
+bool collisionChunkIsLoaded = false;
 
 /**
  * World collision check
@@ -505,17 +497,6 @@ bool pointCollided(float x, float y, float z)
 {
 	int currentChunk[2] = { (int)floor(x / chunkSize), (int)floor(y / chunkSize) };
 	int currentBlock[3] = { (int)floor((int)floor(x) % chunkSize), (int)floor((int)floor(y) % chunkSize), (int)floor(z - 1) };
-	// std::cout << "Chunk S5T" << currentChunk[0] << '|' << currentChunk[1] << " Block: " << currentBlock[0] << '|' << currentBlock[1] << '|' << currentBlock[2] << std::endl;
-
-	// if (x < 0)
-	// {
-	// 	currentChunk[0]--;
-	// }
-
-	// if (y < 0)
-	// {
-	// 	currentChunk[0]--;
-	// }
 
 	if (currentBlock[0] < 0)
 	{
@@ -543,7 +524,7 @@ bool pointCollided(float x, float y, float z)
 						savedChunk = &chunkYitr->second;
 						previousChunkCollide[0] = currentChunk[0];
 						previousChunkCollide[1] = currentChunk[1];
-						chunkIsLoaded = true;
+						collisionChunkIsLoaded = true;
 						newChunkLoaded = true;
 					}
 				}
@@ -551,16 +532,15 @@ bool pointCollided(float x, float y, float z)
 		}
 		if (newChunkLoaded)
 		{
-			chunkIsLoaded = true;
+			collisionChunkIsLoaded = true;
 		}
 		else
 		{
-			chunkIsLoaded = false;
+			collisionChunkIsLoaded = false;
 		}
 		ChunkMapMutex.unlock();
 	}
-	// std::cout << "Chunk " << currentChunk[0] << '|' << currentChunk[1] << " Block: " << currentBlock[0] << '|' << currentBlock[1] << '|' << currentBlock[2] << std::endl;
-	if (chunkIsLoaded)
+	if (collisionChunkIsLoaded)
 	{
 		if (savedChunk->tiles[currentBlock[0]][currentBlock[1]][currentBlock[2]] == 0)
 		{
@@ -571,7 +551,6 @@ bool pointCollided(float x, float y, float z)
 			return false;
 		}
 	}
-	// std::cout << "Chunk not loaded\n";
 	return false;
 }
 
@@ -616,22 +595,24 @@ int main()
 	int mouseCoord[2];
 	float mouseSensitivity = 0.001;
 	float mouseSmoothing = 50.0f;
-	// float mouseSmoothing = 0.0001;
-	float movementSpeed = 5.0f;
+	float movementSpeed = 0.07f; // Should be blocks / second
 
-	const float playerDimensions[3] = { 0.3, 0.3, 1.8 };
-	float verticalVector = 0;
+	const float playerDimensions[3] = { 0.3, 0.3, 1.8 }; // x radius, y radius, height
 	bool onFloor = false;
-	float jumpHeight = 0;
-	float jumpSpeed = 0.2;
+	auto timeSinceLastJump = std::chrono::high_resolution_clock::now();
 	bool flying = false;
 
+	Vector3f movementVector;
+
+	// Constants
+	const float gravity = 0.0093f;
+	const float jumpHeight = 2.0f;
 	// Handle all input
 	sf::Clock deltaClock;
 	while (gameRunning)
 	{
 		sf::Time dt = deltaClock.restart();
-		float deltaTimeMovementSpeed = movementSpeed * (float)dt.asSeconds();
+		float deltaTimeMovementSpeed = movementSpeed * (float)dt.asMicroseconds() / 10000.0f;
 		float deltaTimeMouseSmoothing = mouseSmoothing * (float)dt.asSeconds();
 		if (deltaTimeMouseSmoothing > 0.05f)
 			deltaTimeMouseSmoothing = 0.05f;
@@ -640,7 +621,6 @@ int main()
 
 		if (windowHasFocus)
 		{
-
 			mouseCoord[0] = sf::Mouse::getPosition(window).x;
 			mouseCoord[1] = sf::Mouse::getPosition(window).y;
 
@@ -668,96 +648,118 @@ int main()
 			lookingAt.y += (wantToLook.y - lookingAt.y) * deltaTimeMouseSmoothing;
 			lookingAt.z += (wantToLook.z - lookingAt.z) * deltaTimeMouseSmoothing;
 
-			float moveVector[3] = { 0, 0, verticalVector };
+			Vector2f wantToMove;
 
+			// XY Movement
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
 			{
-				moveVector[0] += deltaTimeMovementSpeed * cos(wantToLook.directionH);
-				moveVector[1] += deltaTimeMovementSpeed * sin(wantToLook.directionH);
+				wantToMove.x += cos(wantToLook.directionH);
+				wantToMove.y += sin(wantToLook.directionH);
 			}
 			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
 			{
-				moveVector[0] -= deltaTimeMovementSpeed * cos(wantToLook.directionH);
-				moveVector[1] -= deltaTimeMovementSpeed * sin(wantToLook.directionH);
+				wantToMove.x += -cos(wantToLook.directionH);
+				wantToMove.y += -sin(wantToLook.directionH);
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
 			{
-				moveVector[0] += deltaTimeMovementSpeed * cos(wantToLook.directionH + M_PI_2);
-				moveVector[1] += deltaTimeMovementSpeed * sin(wantToLook.directionH + M_PI_2);
+				wantToMove.x += cos(wantToLook.directionH + M_PI_2);
+				wantToMove.y += sin(wantToLook.directionH + M_PI_2);
 			}
 			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
 			{
-				moveVector[0] -= deltaTimeMovementSpeed * cos(wantToLook.directionH + M_PI_2);
-				moveVector[1] -= deltaTimeMovementSpeed * sin(wantToLook.directionH + M_PI_2);
+				wantToMove.x += -cos(wantToLook.directionH + M_PI_2);
+				wantToMove.y += -sin(wantToLook.directionH + M_PI_2);
 			}
 
+			// Flying and jumping
+			if (!flying)
+			{
+				movementVector.z -= gravity * dt.asMilliseconds();
+				if (onFloor && sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
+				{
+					auto now = std::chrono::high_resolution_clock::now();
+					float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - timeSinceLastJump).count();
+					if (timeDiff > 0.03f)
+					{
+						movementVector.z = jumpHeight;
+						timeSinceLastJump = std::chrono::high_resolution_clock::now();
+					}
+				}
+			}
+			else
+			{
+				movementVector.z = 0;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
+					movementVector.z += deltaTimeMovementSpeed * 100;
+				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift))
+					movementVector.z -= deltaTimeMovementSpeed * 100;
+			}
+
+			// Other keyboard checks
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::C))
 			{
 				if (!cPressed)
 					flying = !flying;
 				cPressed = true;
+				sf::sleep(sf::milliseconds(5));
 			}
 			else
 				cPressed = false;
 
-			if (!flying)
+			if (onFloor)
 			{
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space) && onFloor)
-					jumpHeight = 0.002;
-
-				float jumpChange = jumpHeight * jumpSpeed;
-				jumpHeight -= jumpChange;
-				verticalVector += jumpChange;
-				verticalVector -= 0.008f * dt.asSeconds();
+				movementVector.x = wantToMove.x;
+				movementVector.y = wantToMove.y;
 			}
 			else
 			{
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
-					moveVector[2] += deltaTimeMovementSpeed;
-				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift))
-					moveVector[2] -= deltaTimeMovementSpeed;
+				movementVector.x += wantToMove.x * (float)dt.asMicroseconds() / 200000.0f;
+				movementVector.y += wantToMove.y * (float)dt.asMicroseconds() / 200000.0f;
 			}
 
-			if (moveVector[0] != 0 || moveVector[1] != 0 || moveVector[2] != 0)
+			if (movementVector.getMagnitudeXYSqr() > 1.0f)
+				movementVector.normaliseVectorXY(1.0);
+
+			if (movementVector.x != 0.0 || movementVector.y != 0.0f || movementVector.z != 0.0f)
 				for (int i = 0; i < 3; i++)
 				{
+					float directionValue = movementVector.getIndex(i) * deltaTimeMovementSpeed;
 					float newPos[3] = { position[0], position[1], position[2] };
-					newPos[i] += moveVector[i];
+					newPos[i] += directionValue;
 
 					bool notCollided = true;
+					// Check each of the player's collision points
 					for (float x = -playerDimensions[0]; x <= playerDimensions[0] && notCollided; x += 2 * playerDimensions[0])
-					{
 						for (float y = -playerDimensions[1]; y <= playerDimensions[1] && notCollided; y += 2 * playerDimensions[1])
-						{
 							for (float z = 0; z <= playerDimensions[2] && notCollided; z += playerDimensions[2] / 2)
-							{
-								notCollided = pointCollided(newPos[0] + 0.5 + x, newPos[1] + 0.5 + y, newPos[2] + z);
-							}
-						}
-					}
-					if (notCollided)
-						position[i] += moveVector[i];
+								notCollided = pointCollided(newPos[0] + 0.5f + x, newPos[1] + 0.5f + y, newPos[2] + z);
 
-					if (i == 2 && !notCollided)
+					if (notCollided)
+						position[i] += directionValue;
+					else
+						movementVector.setIndex(i, 0.0f);
+
+					if (i == 2)
 					{
-						if (moveVector[i] < 0)
+						if (!notCollided)
 						{
-							verticalVector = 0;
-							onFloor = true;
+							movementVector.z = 0;
+							if (directionValue < 0 && collisionChunkIsLoaded)
+								onFloor = true;
+							else
+							{
+								onFloor = false;
+							}
 						}
 						else
 						{
-							verticalVector = 0;
+							onFloor = false;
 						}
 					}
-					else
-					{
-						onFloor = false;
-					}
 				}
+			sf::sleep(sf::milliseconds(1));
 		}
-
-		// sf::sleep(sf::milliseconds(1));
 	}
 
 	renderThread.wait();
