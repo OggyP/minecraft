@@ -87,7 +87,12 @@ public:
 						if (z - 1 < 0 || tiles[x][y][z - 1] == 0)
 						{
 							std::vector<GLfloat> face = {
-								-0.5f + blockCoords[0], -0.5f + blockCoords[1], -0.5f + z, 0.0f, 0.0f, 0.7f, // Down
+								-0.5f + blockCoords[0],
+								-0.5f + blockCoords[1],
+								-0.5f + z,
+								0.0f,
+								1.0f,
+								0.7f, // Down
 								0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
@@ -104,7 +109,7 @@ public:
 								0.5f + blockCoords[1],
 								-0.5f + z,
 								1.0f,
-								1.0f,
+								0.0f,
 								0.7f,
 								-0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
@@ -165,11 +170,12 @@ public:
 						}
 						if ((x + 1 < chunkSize && tiles[x + 1][y][z] == 0) || (x + 1 >= chunkSize && PlusX->tiles[15 - x][y][z] == 0))
 						{
+							// Plus X
 							std::vector<GLfloat> face = {
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								0.5f + z,
-								0.0f,
+								1.0f,
 								0.0f,
 								0.75f,
 								0.5f + blockCoords[0],
@@ -181,13 +187,13 @@ public:
 								0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
 								0.0f,
+								1.0f,
 								0.75f,
 								0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
+								0.0f,
 								1.0f,
 								0.75f,
 								0.5f + blockCoords[0],
@@ -199,8 +205,8 @@ public:
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								0.5f + z,
-								0.0f,
 								1.0f,
+								0.0f,
 								0.75f,
 							};
 							chunkVertices.insert(chunkVertices.end(), face.begin(), face.end());
@@ -212,7 +218,7 @@ public:
 								0.5f + blockCoords[1],
 								-0.5f + z,
 								0.0f,
-								0.0f,
+								1.0f,
 								0.86f,
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
@@ -230,7 +236,7 @@ public:
 								0.5f + blockCoords[1],
 								0.5f + z,
 								1.0f,
-								1.0f,
+								0.0f,
 								0.86f,
 								-0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
