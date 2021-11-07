@@ -826,7 +826,7 @@ int main()
 					auto collidePoints = rayCollision(position, lookingAt);
 					float minMagnitude = 1000000.0f;
 					bool chunkFound = false;
-					GameChunk* collidedChunk;
+					GameChunk* collidedChunk = nullptr;
 					for (const auto& point : collidePoints)
 					{
 						if (point.magnitude < minMagnitude && point.magnitude <= 25.0f)
