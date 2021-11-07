@@ -586,6 +586,8 @@ void updateChunks(int blockX, int blockY, GameChunk* collidedChunk)
 {
 	ChunkVerticiesMutex.lock();
 	updateChunkMultex.lock();
+	updateChunkCoords.clear();
+	newVerticies.clear();
 	updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY }));
 	newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY }), collidedChunk->genVerticies(&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY - 1])));
 	if (blockX == 0)
@@ -661,7 +663,7 @@ std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayD
 			foundCollision collision;
 			collision.chunk = savedChunk;
 			collision.sideClicked = 'X';
-			collision.sideClicked = -rayNormalised[0];
+			collision.collisionSide = -rayNormalised[0];
 			collision.position.x = x;
 			collision.position.y = (int)floor(((float)currentPosition.y + rayDirection.y * scaleX) + 0.5f);
 			collision.position.z = (int)floor((float)currentPosition.z + rayDirection.z * scaleX + 0.5f);
@@ -678,7 +680,7 @@ std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayD
 			foundCollision collision;
 			collision.chunk = savedChunk;
 			collision.sideClicked = 'Y';
-			collision.sideClicked = -rayNormalised[1];
+			collision.collisionSide = -rayNormalised[1];
 			collision.position.x = (int)floor(((float)currentPosition.x + rayDirection.x * scaleY) + 0.5f);
 			collision.position.y = y;
 			collision.position.z = (int)floor((float)currentPosition.z + rayDirection.z * scaleY + 0.5f);
@@ -695,7 +697,7 @@ std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayD
 			foundCollision collision;
 			collision.chunk = savedChunk;
 			collision.sideClicked = 'Z';
-			collision.sideClicked = -rayNormalised[2];
+			collision.collisionSide = -rayNormalised[2];
 			collision.position.x = (int)floor((float)currentPosition.x + rayDirection.x * scaleZ + 0.5f);
 			collision.position.y = (int)floor((float)currentPosition.y + rayDirection.y * scaleZ + 0.5f);
 			collision.position.z = z;
@@ -762,7 +764,8 @@ int main()
 	bool onFloor = false;
 	auto timeSinceLastJump = std::chrono::high_resolution_clock::now();
 	bool flying = false;
-	bool mouseUp = false;
+	bool mouseUpLeft = false;
+	bool mouseUpRight = false;
 
 	Vector3f movementVector;
 
@@ -812,9 +815,9 @@ int main()
 
 			if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
 			{
-				if (mouseUp)
+				if (mouseUpLeft)
 				{
-					mouseUp = false;
+					mouseUpLeft = false;
 					normalVector3i collidePoint;
 					auto collidePoints = rayCollision(position, lookingAt);
 					float minMagnitude = 1000000.0f;
@@ -832,11 +835,76 @@ int main()
 					{
 
 						std::cout << "Clicked on " << collidePoint.x << " | " << collidePoint.y << " | " << collidePoint.z << "\n";
-						int currentBlock[3] = { (int)floor((int)floor(position.x + 0.5f)), (int)floor((int)floor(position.y + 0.5f)), (int)floor(position.z + 0.5f) };
-						std::cout << "Block Pos: " << currentBlock[0] << " | " << currentBlock[1] << " | " << currentBlock[2] << "\n";
-						if (collisionChunkIsLoaded)
+						int chunkBlock[3] = { collidePoint.x % chunkSize, collidePoint.y % chunkSize, collidePoint.z };
+
+						if (chunkBlock[0] < 0)
 						{
-							int chunkBlock[3] = { collidePoint.x % chunkSize, collidePoint.y % chunkSize, collidePoint.z };
+							chunkBlock[0] += chunkSize;
+						}
+
+						if (chunkBlock[1] < 0)
+						{
+							chunkBlock[1] += chunkSize;
+						}
+						collidedChunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]] = 0;
+						updateChunks(chunkBlock[0], chunkBlock[1], collidedChunk);
+					}
+				}
+			}
+			else
+				mouseUpLeft = true;
+
+			if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Right))
+			{
+				if (mouseUpRight)
+				{
+					int currentBlock[3] = { (int)floor((int)floor(position.x + 0.5f)), (int)floor((int)floor(position.y + 0.5f)), (int)floor(position.z + 0.5f) };
+					mouseUpRight = false;
+					foundCollision collidePoint;
+					auto collidePoints = rayCollision(position, lookingAt);
+					float minMagnitude = 1000000.0f;
+					for (const auto& point : collidePoints)
+					{
+						if (point.magnitude < minMagnitude && point.magnitude <= 25.0f)
+						{
+							collidePoint = point;
+							minMagnitude = point.magnitude;
+						}
+					}
+					if (minMagnitude < 500000.0f)
+					{
+						std::cout << "Clicked on " << collidePoint.position.x << " | " << collidePoint.position.y << " | " << collidePoint.position.z << "\n";
+						int initChunkBlock[3] = { collidePoint.position.x % chunkSize, collidePoint.position.y % chunkSize, collidePoint.position.z };
+						int chunkOffsets[2] = { 0, 0 };
+
+						if (collidePoint.sideClicked == 'X')
+						{
+							if (initChunkBlock[0] == 0 && collidePoint.collisionSide == -1)
+								chunkOffsets[0] = -1;
+							else if (initChunkBlock[0] == 15 && collidePoint.collisionSide == 1)
+								chunkOffsets[0] = 1;
+
+							collidePoint.position.x += collidePoint.collisionSide;
+						}
+						else if (collidePoint.sideClicked == 'Y')
+						{
+							if (initChunkBlock[1] == 0 && collidePoint.collisionSide == -1)
+								chunkOffsets[1] = -1;
+							else if (initChunkBlock[1] == 15 && collidePoint.collisionSide == 1)
+								chunkOffsets[1] = 1;
+
+							collidePoint.position.y += collidePoint.collisionSide;
+						}
+						else
+							collidePoint.position.z += collidePoint.collisionSide; // Must be Z
+
+						if (chunkOffsets[0] != 0 || chunkOffsets[1] != 0)
+							collidePoint.chunk = &chunkMap[collidePoint.chunk->chunkX + chunkOffsets[0]][collidePoint.chunk->chunkY + chunkOffsets[1]];
+
+						// prevent placing blocks on yourself
+						if (collidePoint.position.x != currentBlock[0] || collidePoint.position.y != currentBlock[1] || (collidePoint.position.z != currentBlock[2] && collidePoint.position.z != currentBlock[2] - 1))
+						{
+							int chunkBlock[3] = { collidePoint.position.x % chunkSize, collidePoint.position.y % chunkSize, collidePoint.position.z };
 
 							if (chunkBlock[0] < 0)
 							{
@@ -847,16 +915,14 @@ int main()
 							{
 								chunkBlock[1] += chunkSize;
 							}
-							collidedChunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]] = 0;
-							updateChunks(chunkBlock[0], chunkBlock[1], collidedChunk);
+							collidePoint.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]] = 1;
+							updateChunks(chunkBlock[0], chunkBlock[1], collidePoint.chunk);
 						}
 					}
 				}
 			}
 			else
-			{
-				mouseUp = true;
-			}
+				mouseUpRight = true;
 
 			Vector2f wantToMove;
 

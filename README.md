@@ -16,8 +16,12 @@ The controls are the same as minecraft's controls.
 
 > Left click to remove blocks
 
+> Right click to place blocks
+
 ## To do
 
-> Add placing blocks
-
 > Add more than one block
+
+> Lighting
+
+> Seeds
