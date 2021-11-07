@@ -39,14 +39,14 @@ public:
 				float yVal2DnoiseLower = (y + chunkY * chunkSize) * 0.02 + 0.001;
 				float xVal3Dnoise = (x + chunkX * chunkSize) * 0.02 + 0.01;
 				float yVal3Dnoise = (y + chunkY * chunkSize) * 0.02 + 0.01;
-				float noiseVal = 64 + SimplexNoise::noise(xVal2Dnoise, yVal2Dnoise) * 50;
+				float noiseVal = 128 + SimplexNoise::noise(xVal2Dnoise, yVal2Dnoise) * 50;
 				noiseVal += SimplexNoise::noise(xVal2DnoiseLower, yVal2DnoiseLower) * 5;
 				// if (noiseVal > 78)
 				// 	noiseVal += (noiseVal - 78) * (noiseVal - 78) * 2;
 				for (int z = 0; z < chunkHeight; z++)
 				{
 					float zVal = z * 0.02 + 0.01;
-					float zCheckVal = MapValue(0, 30, 0, 0.7, z);
+					float zCheckVal = MapValue(0, 94, 0, 0.7, z);
 					if (z < 8)
 					{
 						zCheckVal += 0.15 * (8 - z);

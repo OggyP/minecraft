@@ -30,7 +30,7 @@ int screenSize[2] = { 1000, 1000 };
 int screenSize[2] = { 1680, 1050 };
 #endif
 
-Vector3f position(0, 0, 100);
+Vector3f position(0, 0, 255);
 Vector3f wantToLook;
 Vector3f lookingAt;
 
