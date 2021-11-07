@@ -8,6 +8,16 @@ public:
 	float directionH = 0;
 	float directionV = 0;
 
+	Vector3f(float startX, float startY, float startZ)
+	{
+		x = startX;
+		y = startY;
+		z = startZ;
+	}
+
+	Vector3f()
+	{}
+
 	float getMagnitude()
 	{
 		return (float)sqrt(x * x + y * y + z * z);
@@ -19,37 +29,27 @@ public:
 		return (float)sqrt(x * x + y * y + z * z);
 	}
 
-	float getIndex(int index)
+	/**
+	 * Get a value by reference from an index
+	 *
+	 * @param[in] index int index, 0-2 coords 3-4 directions H then V
+	 *
+	 * @return Reference to the float value of requested index.
+	 */
+	float* index(int index)
 	{
 		if (index == 0)
-		{
-			return x;
-		}
-		if (index == 1)
-		{
-			return y;
-		}
-		if (index == 2)
-		{
-			return z;
-		}
-		return 0.0f;
-	}
-
-	void setIndex(int index, float value)
-	{
-		if (index == 0)
-		{
-			x = value;
-		}
+			return &x;
 		else if (index == 1)
-		{
-			y = value;
-		}
+			return &y;
 		else if (index == 2)
-		{
-			z = value;
-		}
+			return &z;
+		else if (index == 2)
+			return &z;
+		else if (index == 3)
+			return &directionH;
+		else
+			return &directionV;
 	}
 
 	float getMagnitudeXY()
@@ -83,6 +83,12 @@ public:
 		directionV = atan2(z, getMagnitudeXY());
 	}
 
+	void normalise(float magnitude)
+	{
+		updateDirection();
+		updateCoords(magnitude);
+	}
+
 	void normaliseVectorXY(double magnitude)
 	{
 		double mag = x * x + y * y;
@@ -93,6 +99,12 @@ public:
 			y = y * normaliseAmt;
 		}
 	}
+};
+
+struct normalVector3i {
+	int x;
+	int y;
+	int z;
 };
 
 class Vector2f

@@ -24,8 +24,13 @@
 // # define M_SQRT2	1.41421356237309504880	/* sqrt(2) */
 // # define M_SQRT1_2	0.70710678118654752440	/* 1/sqrt(2) */
 
+#if defined(_DEBUG)
+int screenSize[2] = { 1000, 1000 };
+#else
 int screenSize[2] = { 1680, 1050 };
-float position[3] = { 0.0f, 0.0f, 150.0f };
+#endif
+
+Vector3f position(0, 0, 100);
 Vector3f wantToLook;
 Vector3f lookingAt;
 
@@ -51,6 +56,9 @@ std::map<int, GameChunk>::iterator chunkYitr;
 // map of chunk verticies
 sf::Mutex ChunkVerticiesMutex;
 std::vector<std::pair<std::array<int, 2>, std::vector<GLfloat>>> newVerticies;
+
+sf::Mutex updateChunkMultex;
+std::vector<std::array<int, 2>> updateChunkCoords;
 
 std::map<int, std::map<int, std::array<GLuint, 2>>> bufferMap;
 
@@ -239,6 +247,7 @@ void renderingThread(sf::Window* window)
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_FRONT);
 
+	// ChunkX, ChunkY, Chunk Enabled
 	std::array<std::array<int, 3>, chunksAmt * chunksAmt> chunkIds;
 	int chunkVetexSizes[chunksAmt * chunksAmt];
 	for (int i = 0; i < chunksAmt * chunksAmt; i++)
@@ -294,7 +303,7 @@ void renderingThread(sf::Window* window)
 		glEnable(GL_DEPTH_TEST);
 		glUseProgram(sceneShaderProgram);
 
-		float scaledPlayerPos[3] = { position[0] * blockScale, position[1] * blockScale, position[2] * blockScale };
+		float scaledPlayerPos[3] = { position.x * blockScale, position.y * blockScale, position.z * blockScale };
 
 		glm::mat4 view = glm::lookAt(
 			glm::vec3(scaledPlayerPos[0], scaledPlayerPos[1], scaledPlayerPos[2]),
@@ -302,13 +311,28 @@ void renderingThread(sf::Window* window)
 			glm::vec3(0.0f, 0.0f, 1.0f));
 		glUniformMatrix4fv(uniView, 1, GL_FALSE, glm::value_ptr(view));
 
-		const int currentChunk[2] = { (int)floor(position[0] / chunkSize), (int)floor(position[1] / chunkSize) };
+		const int currentChunk[2] = { (int)floor(position.x / chunkSize), (int)floor(position.y / chunkSize) };
 		const int chunkBoundaries[2][2] = { { currentChunk[0] - renderDistance, currentChunk[0] + renderDistance }, { currentChunk[1] - renderDistance, currentChunk[1] + renderDistance } };
 		// Draw cube
 		// Render frame
 
 		// Used to cap the max VBO uploads per frame
 		int VBOuploads = 0;
+
+		updateChunkMultex.lock();
+		if (updateChunkCoords.size() > 1)
+		{
+			std::cout << updateChunkCoords.size() << "Chunks\n";
+		}
+		for (auto& array : updateChunkCoords) // access by reference to avoid copying
+		{
+			for (int i = 0; i < chunksAmt * chunksAmt; i++)
+				if (chunkIds[i][2])
+					if (chunkIds[i][0] == array[0] && chunkIds[i][1] == array[1])
+						chunkIds[i][2] = false;
+		}
+		updateChunkCoords.clear();
+		updateChunkMultex.unlock();
 
 		for (int i = 0; i < chunksAmt * chunksAmt; i++)
 		{
@@ -403,7 +427,7 @@ void chunkGenThread()
 	bool updateChunks = true;
 	while (gameRunning)
 	{
-		const int currentChunk[2] = { (int)floor(position[0] / chunkSize), (int)floor(position[1] / chunkSize) };
+		const int currentChunk[2] = { (int)floor(position.x / chunkSize), (int)floor(position.y / chunkSize) };
 		if ((currentChunk[0] != previousChunk[0] || currentChunk[1] != previousChunk[1]) || updateChunks)
 		{
 			// [[lower bounds x, higher bounds x], [lower bounds y, higher bounds y]] (inclusive)
@@ -479,7 +503,7 @@ void chunkGenThread()
 	}
 }
 
-int previousChunkCollide[2] = { 0, 0 };
+int currentlySavedChunk[2] = { 0, 0 };
 GameChunk* savedChunk;
 bool collisionChunkIsLoaded = false;
 
@@ -492,11 +516,11 @@ bool collisionChunkIsLoaded = false;
  *
  * @return Boolean value, true if that point is NOT inside of a block. False if the chunk has not been generated.
  */
-bool pointCollided(float x, float y, float z);
-bool pointCollided(float x, float y, float z)
+bool pointIsAir(float x, float y, float z);
+bool pointIsAir(float x, float y, float z)
 {
-	int currentChunk[2] = { (int)floor(x / chunkSize), (int)floor(y / chunkSize) };
-	int currentBlock[3] = { (int)floor((int)floor(x) % chunkSize), (int)floor((int)floor(y) % chunkSize), (int)floor(z - 1) };
+	int currentChunk[2] = { (int)floor((x + 0.5f) / chunkSize), (int)floor((y + 0.5f) / chunkSize) };
+	int currentBlock[3] = { (int)floor((int)floor(x + 0.5f) % chunkSize), (int)floor((int)floor(y + 0.5f) % chunkSize), (int)floor(z + 0.5f) };
 
 	if (currentBlock[0] < 0)
 	{
@@ -508,7 +532,9 @@ bool pointCollided(float x, float y, float z)
 		currentBlock[1] += chunkSize;
 	}
 
-	if (previousChunkCollide[0] != currentChunk[0] || previousChunkCollide[1] != currentChunk[1] || spawnChunksLoaded)
+	// std::cout << "Current Block Pos: " << currentChunk[0] << " | " << currentChunk[1] << " ||| " << currentBlock[0] << " | " << currentBlock[1] << " | " << currentBlock[2] << "\n";
+
+	if (currentlySavedChunk[0] != currentChunk[0] || currentlySavedChunk[1] != currentChunk[1] || spawnChunksLoaded || !collisionChunkIsLoaded)
 	{
 		spawnChunksLoaded = false;
 		bool newChunkLoaded = false;
@@ -522,8 +548,8 @@ bool pointCollided(float x, float y, float z)
 					if (chunkYitr->first == currentChunk[1])
 					{
 						savedChunk = &chunkYitr->second;
-						previousChunkCollide[0] = currentChunk[0];
-						previousChunkCollide[1] = currentChunk[1];
+						currentlySavedChunk[0] = currentChunk[0];
+						currentlySavedChunk[1] = currentChunk[1];
 						collisionChunkIsLoaded = true;
 						newChunkLoaded = true;
 					}
@@ -551,7 +577,137 @@ bool pointCollided(float x, float y, float z)
 			return false;
 		}
 	}
+	std::cout << "Chunk Not Loaded" << std::endl;
 	return false;
+}
+
+void updateChunks(int blockX, int blockY, GameChunk* collidedChunk);
+void updateChunks(int blockX, int blockY, GameChunk* collidedChunk)
+{
+	ChunkVerticiesMutex.lock();
+	updateChunkMultex.lock();
+	updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY }));
+	newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY }), collidedChunk->genVerticies(&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY - 1])));
+	if (blockX == 0)
+	{
+		// Update chunk -1 X
+		updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX - 1, collidedChunk->chunkY }));
+		newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX - 1, collidedChunk->chunkY }), (&chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY])->genVerticies(&chunkMap[collidedChunk->chunkX][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX - 2][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY - 1])));
+	}
+	else if (blockX == 15)
+	{
+		// Update chunk +1 X
+		updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX + 1, collidedChunk->chunkY }));
+		newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX + 1, collidedChunk->chunkY }), (&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY])->genVerticies(&chunkMap[collidedChunk->chunkX + 2][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY - 1])));
+	}
+	if (blockY == 0)
+	{
+		// Update chunk -1 Y
+		updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY - 1 }));
+		newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY - 1 }), (&chunkMap[collidedChunk->chunkX][collidedChunk->chunkY - 1])->genVerticies(&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY - 1], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY - 1], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY - 2])));
+	}
+	else if (blockY == 15)
+	{
+		// Update chunk +1 Y
+		updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY + 1 }));
+		newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY + 1 }), (&chunkMap[collidedChunk->chunkX][collidedChunk->chunkY + 1])->genVerticies(&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY + 2], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY])));
+	}
+	updateChunkMultex.unlock();
+	ChunkVerticiesMutex.unlock();
+}
+
+struct foundCollision
+{
+	normalVector3i position;
+	float magnitude;
+	GameChunk* chunk;
+	char sideClicked;
+	int collisionSide; // Is going to be the negative of the normalised ray
+};
+
+/**
+ * Ray cast and return the coords of intersection
+ *
+ * @param[in] currentPosition Vector3f the origin of the ray
+ * @param[in] rayDirection Vector3f the direction of the ray
+ *
+ * @return Vector of foundCollision.
+ */
+std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayDirection);
+std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayDirection)
+{
+	rayDirection.normalise(1.0f);
+
+	int originBlock[3] = { (int)floor((int)floor(currentPosition.x + 0.5f)), (int)floor((int)floor(currentPosition.y + 0.5f)), (int)floor(currentPosition.z + 0.5f) };
+	const int rayNormalised[3] = { (int)round(rayDirection.x / std::abs(rayDirection.x)), (int)round(rayDirection.y / std::abs(rayDirection.y)), (int)round(rayDirection.z / std::abs(rayDirection.z)) };
+	std::cout << "Ray Normalised: " << rayNormalised[0] << " | " << rayNormalised[1] << " | " << rayNormalised[2] << std::endl;
+
+	int x = originBlock[0] + rayNormalised[0];
+	int y = originBlock[1] + rayNormalised[1];
+	int z = originBlock[2] + rayNormalised[2];
+
+	float scaleX = (((float)x + (-0.5f * (float)rayNormalised[0])) - currentPosition.x) / rayDirection.x;
+	float scaleY = (((float)y + (-0.5f * (float)rayNormalised[1])) - currentPosition.y) / rayDirection.y;
+	float scaleZ = (((float)z + (-0.5f * (float)rayNormalised[2])) - currentPosition.z) / rayDirection.z;
+
+	std::vector<foundCollision> collisionPoints;
+
+	while (scaleX < 5 || scaleY < 5 || scaleZ < 5)
+	{
+
+		if (!pointIsAir((float)x - 0.5f, (float)currentPosition.y + rayDirection.y * scaleX, (float)currentPosition.z + rayDirection.z * scaleX))
+		{
+			std::cout << "X Collide\n";
+			foundCollision collision;
+			collision.chunk = savedChunk;
+			collision.sideClicked = 'X';
+			collision.sideClicked = -rayNormalised[0];
+			collision.position.x = x;
+			collision.position.y = (int)floor(((float)currentPosition.y + rayDirection.y * scaleX) + 0.5f);
+			collision.position.z = (int)floor((float)currentPosition.z + rayDirection.z * scaleX + 0.5f);
+			collision.magnitude = pow(x - currentPosition.x, 2) + pow(rayDirection.y * scaleX, 2) + pow(rayDirection.z * scaleX, 2);
+			collisionPoints.push_back(collision);
+		}
+
+		x += rayNormalised[0];
+		scaleX = (((float)x + (-0.5f * (float)rayNormalised[0])) - currentPosition.x) / rayDirection.x;
+
+		if (!pointIsAir((float)currentPosition.x + rayDirection.x * scaleY, (float)y - 0.5f, (float)currentPosition.z + rayDirection.z * scaleY))
+		{
+			std::cout << "Y Collide\n";
+			foundCollision collision;
+			collision.chunk = savedChunk;
+			collision.sideClicked = 'Y';
+			collision.sideClicked = -rayNormalised[1];
+			collision.position.x = (int)floor(((float)currentPosition.x + rayDirection.x * scaleY) + 0.5f);
+			collision.position.y = y;
+			collision.position.z = (int)floor((float)currentPosition.z + rayDirection.z * scaleY + 0.5f);
+			collision.magnitude = pow(rayDirection.x * scaleY, 2) + pow(y - currentPosition.y, 2) + pow(rayDirection.z * scaleY, 2);
+			collisionPoints.push_back(collision);
+		}
+
+		y += rayNormalised[1];
+		scaleY = (((float)y + (-0.5f * (float)rayNormalised[1])) - currentPosition.y) / rayDirection.y;
+
+		if (!pointIsAir((float)currentPosition.x + rayDirection.x * scaleZ, (float)currentPosition.y + rayDirection.y * scaleZ, (float)z - 0.5f))
+		{
+			std::cout << "Z Collide\n";
+			foundCollision collision;
+			collision.chunk = savedChunk;
+			collision.sideClicked = 'Z';
+			collision.sideClicked = -rayNormalised[2];
+			collision.position.x = (int)floor((float)currentPosition.x + rayDirection.x * scaleZ + 0.5f);
+			collision.position.y = (int)floor((float)currentPosition.y + rayDirection.y * scaleZ + 0.5f);
+			collision.position.z = z;
+			collision.magnitude = pow(rayDirection.x * scaleZ, 2) + pow(rayDirection.y * scaleZ, 2) + pow(z - currentPosition.z, 2);
+			collisionPoints.push_back(collision);
+		}
+
+		z += rayNormalised[2];
+		scaleZ = (((float)z + (-0.5f * (float)rayNormalised[2])) - currentPosition.z) / rayDirection.z;
+	}
+
+	return collisionPoints;
 }
 
 int main()
@@ -559,7 +715,7 @@ int main()
 	util::Platform platform;
 
 #if defined(_DEBUG)
-	std::cout << "Hello World!" << std::endl;
+	std::cout << "Hello World! Debug Mode Enabled." << std::endl;
 #endif
 	sf::ContextSettings settings;
 	settings.depthBits = 24;
@@ -573,8 +729,13 @@ int main()
 	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Resize | sf::Style::Close, settings);
 	platform.setIcon(window.getSystemHandle());
 
+#if defined(_DEBUG)
+	std::cout << "Shrinking Window and moving it." << std::endl;
+	window.setPosition(sf::Vector2i(500, 0));
+#else
 	window.setMouseCursorGrabbed(true);
 	window.setMouseCursorVisible(false);
+#endif
 	window.setVerticalSyncEnabled(true);
 	window.setFramerateLimit(60);
 
@@ -601,6 +762,7 @@ int main()
 	bool onFloor = false;
 	auto timeSinceLastJump = std::chrono::high_resolution_clock::now();
 	bool flying = false;
+	bool mouseUp = false;
 
 	Vector3f movementVector;
 
@@ -624,7 +786,7 @@ int main()
 			mouseCoord[0] = sf::Mouse::getPosition(window).x;
 			mouseCoord[1] = sf::Mouse::getPosition(window).y;
 
-			if (mouseCoord[0] != screenSize[0] / 2 && mouseCoord[1] != screenSize[1] / 2)
+			if (mouseCoord[0] != screenSize[0] / 2 || mouseCoord[1] != screenSize[1] / 2)
 			{
 				// Mouse has moved
 				wantToLook.directionH -= (mouseCoord[0] - screenSize[0] / 2) * mouseSensitivity;
@@ -647,6 +809,54 @@ int main()
 			lookingAt.x += (wantToLook.x - lookingAt.x) * deltaTimeMouseSmoothing;
 			lookingAt.y += (wantToLook.y - lookingAt.y) * deltaTimeMouseSmoothing;
 			lookingAt.z += (wantToLook.z - lookingAt.z) * deltaTimeMouseSmoothing;
+
+			if (sf::Mouse::isButtonPressed(sf::Mouse::Button::Left))
+			{
+				if (mouseUp)
+				{
+					mouseUp = false;
+					normalVector3i collidePoint;
+					auto collidePoints = rayCollision(position, lookingAt);
+					float minMagnitude = 1000000.0f;
+					GameChunk* collidedChunk;
+					for (const auto& point : collidePoints)
+					{
+						if (point.magnitude < minMagnitude && point.magnitude <= 25.0f)
+						{
+							collidePoint = point.position;
+							minMagnitude = point.magnitude;
+							collidedChunk = point.chunk;
+						}
+					}
+					if (minMagnitude < 500000.0f)
+					{
+
+						std::cout << "Clicked on " << collidePoint.x << " | " << collidePoint.y << " | " << collidePoint.z << "\n";
+						int currentBlock[3] = { (int)floor((int)floor(position.x + 0.5f)), (int)floor((int)floor(position.y + 0.5f)), (int)floor(position.z + 0.5f) };
+						std::cout << "Block Pos: " << currentBlock[0] << " | " << currentBlock[1] << " | " << currentBlock[2] << "\n";
+						if (collisionChunkIsLoaded)
+						{
+							int chunkBlock[3] = { collidePoint.x % chunkSize, collidePoint.y % chunkSize, collidePoint.z };
+
+							if (chunkBlock[0] < 0)
+							{
+								chunkBlock[0] += chunkSize;
+							}
+
+							if (chunkBlock[1] < 0)
+							{
+								chunkBlock[1] += chunkSize;
+							}
+							collidedChunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]] = 0;
+							updateChunks(chunkBlock[0], chunkBlock[1], collidedChunk);
+						}
+					}
+				}
+			}
+			else
+			{
+				mouseUp = true;
+			}
 
 			Vector2f wantToMove;
 
@@ -680,7 +890,7 @@ int main()
 				{
 					auto now = std::chrono::high_resolution_clock::now();
 					float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - timeSinceLastJump).count();
-					if (timeDiff > 0.03f)
+					if (timeDiff > 0.13f)
 					{
 						movementVector.z = jumpHeight;
 						timeSinceLastJump = std::chrono::high_resolution_clock::now();
@@ -707,7 +917,7 @@ int main()
 			else
 				cPressed = false;
 
-			if (onFloor)
+			if (onFloor || flying)
 			{
 				movementVector.x = wantToMove.x;
 				movementVector.y = wantToMove.y;
@@ -724,8 +934,8 @@ int main()
 			if (movementVector.x != 0.0 || movementVector.y != 0.0f || movementVector.z != 0.0f)
 				for (int i = 0; i < 3; i++)
 				{
-					float directionValue = movementVector.getIndex(i) * deltaTimeMovementSpeed;
-					float newPos[3] = { position[0], position[1], position[2] };
+					float directionValue = *movementVector.index(i) * deltaTimeMovementSpeed;
+					float newPos[3] = { position.x, position.y, position.z };
 					newPos[i] += directionValue;
 
 					bool notCollided = true;
@@ -733,12 +943,12 @@ int main()
 					for (float x = -playerDimensions[0]; x <= playerDimensions[0] && notCollided; x += 2 * playerDimensions[0])
 						for (float y = -playerDimensions[1]; y <= playerDimensions[1] && notCollided; y += 2 * playerDimensions[1])
 							for (float z = 0; z <= playerDimensions[2] && notCollided; z += playerDimensions[2] / 2)
-								notCollided = pointCollided(newPos[0] + 0.5f + x, newPos[1] + 0.5f + y, newPos[2] + z);
+								notCollided = pointIsAir(newPos[0] + x, newPos[1] + y, newPos[2] + z - 1.7);
 
 					if (notCollided)
-						position[i] += directionValue;
+						*position.index(i) += directionValue;
 					else
-						movementVector.setIndex(i, 0.0f);
+						*movementVector.index(i) = 0;
 
 					if (i == 2)
 					{
@@ -758,6 +968,7 @@ int main()
 						}
 					}
 				}
+
 			sf::sleep(sf::milliseconds(1));
 		}
 	}

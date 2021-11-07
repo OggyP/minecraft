@@ -14,8 +14,10 @@ The controls are the same as minecraft's controls.
 
 > C to enable / disable flying
 
+> Left click to remove blocks
+
 ## To do
 
-> I am yet to add mining (I will soon)
+> Add placing blocks
 
 > Add more than one block
