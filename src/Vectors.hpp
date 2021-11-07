@@ -101,10 +101,11 @@ public:
 	}
 };
 
-struct normalVector3i {
-	int x;
-	int y;
-	int z;
+struct normalVector3i
+{
+	int x = 0;
+	int y = 0;
+	int z = 0;
 };
 
 class Vector2f

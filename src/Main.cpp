@@ -522,6 +522,9 @@ bool pointIsAir(float x, float y, float z)
 	int currentChunk[2] = { (int)floor((x + 0.5f) / chunkSize), (int)floor((y + 0.5f) / chunkSize) };
 	int currentBlock[3] = { (int)floor((int)floor(x + 0.5f) % chunkSize), (int)floor((int)floor(y + 0.5f) % chunkSize), (int)floor(z + 0.5f) };
 
+	if (currentBlock[2] > 255 || currentBlock[2] < 0)
+		return true;
+
 	if (currentBlock[0] < 0)
 	{
 		currentBlock[0] += chunkSize;
@@ -620,11 +623,12 @@ void updateChunks(int blockX, int blockY, GameChunk* collidedChunk)
 
 struct foundCollision
 {
+	// Default Valuse
 	normalVector3i position;
-	float magnitude;
-	GameChunk* chunk;
-	char sideClicked;
-	int collisionSide; // Is going to be the negative of the normalised ray
+	float magnitude = 0.0f;
+	GameChunk* chunk = nullptr;
+	char sideClicked = 'L';
+	int collisionSide = 69; // Is going to be the negative of the normalised ray
 };
 
 /**
@@ -720,7 +724,7 @@ int main()
 	std::cout << "Hello World! Debug Mode Enabled." << std::endl;
 #endif
 	sf::ContextSettings settings;
-	settings.depthBits = 24;
+	settings.depthBits = 32;
 	settings.stencilBits = 8;
 	settings.antialiasingLevel = 2; // Optional
 	// Request OpenGL version 3.2
@@ -821,6 +825,7 @@ int main()
 					normalVector3i collidePoint;
 					auto collidePoints = rayCollision(position, lookingAt);
 					float minMagnitude = 1000000.0f;
+					bool chunkFound = false;
 					GameChunk* collidedChunk;
 					for (const auto& point : collidePoints)
 					{
@@ -829,11 +834,11 @@ int main()
 							collidePoint = point.position;
 							minMagnitude = point.magnitude;
 							collidedChunk = point.chunk;
+							chunkFound = true;
 						}
 					}
-					if (minMagnitude < 500000.0f)
+					if (chunkFound)
 					{
-
 						std::cout << "Clicked on " << collidePoint.x << " | " << collidePoint.y << " | " << collidePoint.z << "\n";
 						int chunkBlock[3] = { collidePoint.x % chunkSize, collidePoint.y % chunkSize, collidePoint.z };
 
