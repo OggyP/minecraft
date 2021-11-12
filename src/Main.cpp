@@ -771,6 +771,8 @@ int main()
 	bool mouseUpLeft = false;
 	bool mouseUpRight = false;
 
+	bool cPressed = false;
+
 	Vector3f movementVector;
 
 	// Constants
@@ -785,8 +787,6 @@ int main()
 		float deltaTimeMouseSmoothing = mouseSmoothing * (float)dt.asSeconds();
 		if (deltaTimeMouseSmoothing > 0.05f)
 			deltaTimeMouseSmoothing = 0.05f;
-
-		bool cPressed = false;
 
 		if (windowHasFocus)
 		{
@@ -981,9 +981,11 @@ int main()
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::C))
 			{
 				if (!cPressed)
+				{
 					flying = !flying;
-				cPressed = true;
-				sf::sleep(sf::milliseconds(5));
+					cPressed = true;
+					sf::sleep(sf::milliseconds(50));
+				}
 			}
 			else
 				cPressed = false;
