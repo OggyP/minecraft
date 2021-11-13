@@ -24,6 +24,7 @@
 // # define M_SQRT2	1.41421356237309504880	/* sqrt(2) */
 // # define M_SQRT1_2	0.70710678118654752440	/* 1/sqrt(2) */
 
+bool screenResize = false;
 #if defined(_DEBUG)
 int screenSize[2] = { 1000, 1000 };
 #else
@@ -261,7 +262,6 @@ void renderingThread(sf::Window* window)
 	auto startTime = std::chrono::high_resolution_clock::now();
 	bool logFPStoConsole = false;
 
-	sf::Event event;
 	while (gameRunning)
 	{
 		if (spawnChunksLoaded && !logFPStoConsole)
@@ -269,25 +269,11 @@ void renderingThread(sf::Window* window)
 			startTime = std::chrono::high_resolution_clock::now();
 			logFPStoConsole = true;
 		}
-		while (window->pollEvent(event))
+
+		if (screenResize)
 		{
-			if (event.type == sf::Event::Closed)
-				window->close();
-			else if (event.type == sf::Event::GainedFocus)
-				windowHasFocus = true;
-			else if (event.type == sf::Event::LostFocus)
-				windowHasFocus = false;
-			else if (event.type == sf::Event::Resized)
-			{
-				// update the view to the new size of the window
-				screenSize[0] = event.size.width;
-				screenSize[1] = event.size.height;
-				glViewport(0, 0, event.size.width, event.size.height);
-			}
-			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape) || event.type == sf::Event::Closed)
-			{
-				gameRunning = false;
-			}
+			screenResize = false;
+			glViewport(0, 0, screenSize[0], screenSize[1]);
 		}
 
 		glBindFramebuffer(GL_FRAMEBUFFER, frameBuffer);
@@ -535,8 +521,6 @@ bool pointIsAir(float x, float y, float z)
 		currentBlock[1] += chunkSize;
 	}
 
-	// std::cout << "Current Block Pos: " << currentChunk[0] << " | " << currentChunk[1] << " ||| " << currentBlock[0] << " | " << currentBlock[1] << " | " << currentBlock[2] << "\n";
-
 	if (currentlySavedChunk[0] != currentChunk[0] || currentlySavedChunk[1] != currentChunk[1] || spawnChunksLoaded || !collisionChunkIsLoaded)
 	{
 		spawnChunksLoaded = false;
@@ -580,7 +564,6 @@ bool pointIsAir(float x, float y, float z)
 			return false;
 		}
 	}
-	std::cout << "Chunk Not Loaded" << std::endl;
 	return false;
 }
 
@@ -646,7 +629,6 @@ std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayD
 
 	int originBlock[3] = { (int)floor((int)floor(currentPosition.x + 0.5f)), (int)floor((int)floor(currentPosition.y + 0.5f)), (int)floor(currentPosition.z + 0.5f) };
 	const int rayNormalised[3] = { (int)round(rayDirection.x / std::abs(rayDirection.x)), (int)round(rayDirection.y / std::abs(rayDirection.y)), (int)round(rayDirection.z / std::abs(rayDirection.z)) };
-	std::cout << "Ray Normalised: " << rayNormalised[0] << " | " << rayNormalised[1] << " | " << rayNormalised[2] << std::endl;
 
 	int x = originBlock[0] + rayNormalised[0];
 	int y = originBlock[1] + rayNormalised[1];
@@ -663,7 +645,6 @@ std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayD
 
 		if (!pointIsAir((float)x - 0.5f, (float)currentPosition.y + rayDirection.y * scaleX, (float)currentPosition.z + rayDirection.z * scaleX))
 		{
-			std::cout << "X Collide\n";
 			foundCollision collision;
 			collision.chunk = savedChunk;
 			collision.sideClicked = 'X';
@@ -680,7 +661,6 @@ std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayD
 
 		if (!pointIsAir((float)currentPosition.x + rayDirection.x * scaleY, (float)y - 0.5f, (float)currentPosition.z + rayDirection.z * scaleY))
 		{
-			std::cout << "Y Collide\n";
 			foundCollision collision;
 			collision.chunk = savedChunk;
 			collision.sideClicked = 'Y';
@@ -697,7 +677,6 @@ std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayD
 
 		if (!pointIsAir((float)currentPosition.x + rayDirection.x * scaleZ, (float)currentPosition.y + rayDirection.y * scaleZ, (float)z - 0.5f))
 		{
-			std::cout << "Z Collide\n";
 			foundCollision collision;
 			collision.chunk = savedChunk;
 			collision.sideClicked = 'Z';
@@ -732,7 +711,13 @@ int main()
 	settings.minorVersion = 2;
 	settings.attributeFlags = sf::ContextSettings::Core;
 
+#if defined(_DEBUG)
+	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft DEBUGGING MODE", sf::Style::Resize | sf::Style::Close, settings);
+#else
 	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Resize | sf::Style::Close, settings);
+	platform.toggleFullscreen(window.getSystemHandle(), sf::Style::Fullscreen, false, sf::Vector2u(sf::VideoMode::getDesktopMode().width, sf::VideoMode::getDesktopMode().height));
+#endif
+	std::cout << sf::VideoMode::getDesktopMode().width << "\n";
 	platform.setIcon(window.getSystemHandle());
 
 #if defined(_DEBUG)
@@ -780,6 +765,7 @@ int main()
 	const float jumpHeight = 2.0f;
 	// Handle all input
 	sf::Clock deltaClock;
+	sf::Event event;
 	while (gameRunning)
 	{
 		sf::Time dt = deltaClock.restart();
@@ -787,6 +773,25 @@ int main()
 		float deltaTimeMouseSmoothing = mouseSmoothing * (float)dt.asSeconds();
 		if (deltaTimeMouseSmoothing > 0.05f)
 			deltaTimeMouseSmoothing = 0.05f;
+
+		while (window.pollEvent(event))
+		{
+			if (event.type == sf::Event::GainedFocus)
+				windowHasFocus = true;
+			else if (event.type == sf::Event::LostFocus)
+				windowHasFocus = false;
+			else if (event.type == sf::Event::Resized)
+			{
+				// update the view to the new size of the window
+				screenSize[0] = event.size.width;
+				screenSize[1] = event.size.height;
+				screenResize = true;
+			}
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::Escape) || event.type == sf::Event::Closed)
+			{
+				gameRunning = false;
+			}
+		}
 
 		if (windowHasFocus)
 		{
