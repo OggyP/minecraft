@@ -1,10 +1,18 @@
 #include <SimplexNoise.hpp>
 #include <random>
+#include <chrono>
 
-std::random_device rd;
-std::mt19937 gen(rd());
+  /* Seed */
+  std::random_device rd;
 
-std::uniform_real_distribution<> distribution(1000000, 2000000);
+  /* Random number generator */
+  std::default_random_engine generator(rd());
+
+  /* Distribution on which to apply the generator */
+  std::uniform_int_distribution<unsigned> distribution(0,0xFFFFFF);
+
+
+std::array<unsigned, 2> seed = { distribution(generator), distribution(generator) };
 
 const int chunkSize = 16;
 const int chunkHeight = 256;
@@ -33,12 +41,12 @@ public:
 		{
 			for (int y = 0; y < chunkSize; y++)
 			{
-				float xVal2Dnoise = (x + chunkX * chunkSize) * 0.005 + 0.0005;
-				float yVal2Dnoise = (y + chunkY * chunkSize) * 0.005 + 0.0005;
-				float xVal2DnoiseLower = (x + chunkX * chunkSize) * 0.02 + 0.001;
-				float yVal2DnoiseLower = (y + chunkY * chunkSize) * 0.02 + 0.001;
-				float xVal3Dnoise = (x + chunkX * chunkSize) * 0.02 + 0.01;
-				float yVal3Dnoise = (y + chunkY * chunkSize) * 0.02 + 0.01;
+				float xVal2Dnoise = (seed[0] + x + chunkX * chunkSize) * 0.005 + 0.0005;
+				float yVal2Dnoise = (seed[1] + y + chunkY * chunkSize) * 0.005 + 0.0005;
+				float xVal2DnoiseLower = (seed[0] + x + chunkX * chunkSize) * 0.02 + 0.001;
+				float yVal2DnoiseLower = (seed[1] + y + chunkY * chunkSize) * 0.02 + 0.001;
+				float xVal3Dnoise = (seed[0] + x + chunkX * chunkSize) * 0.02 + 0.01;
+				float yVal3Dnoise = (seed[1] + y + chunkY * chunkSize) * 0.02 + 0.01;
 				float noiseVal = 128 + SimplexNoise::noise(xVal2Dnoise, yVal2Dnoise) * 50;
 				noiseVal += SimplexNoise::noise(xVal2DnoiseLower, yVal2DnoiseLower) * 5;
 				// if (noiseVal > 78)
