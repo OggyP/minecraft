@@ -1018,17 +1018,18 @@ int main()
 
 					bool notCollided = true;
 					// Check each of the player's collision points
-					for (float x = -playerDimensions[0]; x <= playerDimensions[0] && notCollided; x += 2 * playerDimensions[0])
-						for (float y = -playerDimensions[1]; y <= playerDimensions[1] && notCollided; y += 2 * playerDimensions[1])
-							for (float z = 0; z <= playerDimensions[2] && notCollided; z += playerDimensions[2] / 2)
-								notCollided = pointIsAir(newPos[0] + x, newPos[1] + y, newPos[2] + z - 1.7);
+					if (!flying)
+						for (float x = -playerDimensions[0]; x <= playerDimensions[0] && notCollided; x += 2 * playerDimensions[0])
+							for (float y = -playerDimensions[1]; y <= playerDimensions[1] && notCollided; y += 2 * playerDimensions[1])
+								for (float z = 0; z <= playerDimensions[2] && notCollided; z += playerDimensions[2] / 2)
+									notCollided = pointIsAir(newPos[0] + x, newPos[1] + y, newPos[2] + z - 1.7);
 
 					if (notCollided)
-						*position.index(i) += directionValue;
+						*position.index(i) += directionValue * (flying * 5.0f + 1.0f);
 					else
 						*movementVector.index(i) = 0;
 
-					if (i == 2)
+					if (i == 2 && !flying)
 					{
 						if (!notCollided)
 						{
