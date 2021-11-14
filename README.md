@@ -12,6 +12,7 @@ The controls are the same as Minecraft's controls.
 * C to enable / disable flying
 * Left click to remove blocks
 * Right click to place blocks
+* F toggles fog
 
 ## To do
 

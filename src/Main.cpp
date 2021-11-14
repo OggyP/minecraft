@@ -48,6 +48,9 @@ const int GPUchunkUploadLimit = 10000000;
 
 bool spawnChunksLoaded = false;
 
+// Input changes
+bool updateFog = false;
+
 // map of chunks
 sf::Mutex ChunkMapMutex;
 std::map<int, std::map<int, GameChunk>> chunkMap;
@@ -76,6 +79,7 @@ const GLchar* sceneVertexSource = R"glsl(
 
     out vec2 texCoord;
 	out float Brightness;
+	out float distanceFromPlayer;
 
 	uniform mat4 model;
 	uniform mat4 view;
@@ -84,9 +88,11 @@ const GLchar* sceneVertexSource = R"glsl(
 
     void main()
     {
-        gl_Position =  proj * view * model * vec4((position * scale) - playerPosition, 1.0);
+		vec4 newPos = vec4((position * scale) - playerPosition, 1.0);
+        gl_Position =  proj * view * model * newPos;
         texCoord = texcoord;
 		Brightness = brightness;
+		distanceFromPlayer = newPos.x * newPos.x + newPos.y * newPos.y + newPos.z * newPos.z;
     }
 )glsl";
 // Fragment
@@ -95,14 +101,23 @@ const GLchar* sceneFragmentSource = R"glsl(
 
     in vec2 texCoord;
 	in float Brightness;
+	in float distanceFromPlayer;
 
     out vec4 outColor;
 
 	uniform sampler2D blockTexture;
+	uniform bool showFog;
 
     void main()
     {
-        outColor = texture(blockTexture, texCoord) * Brightness;
+		if (!showFog || distanceFromPlayer < 55) {
+        	outColor = texture(blockTexture, texCoord) * Brightness;
+		}
+		else if (distanceFromPlayer < 70) {
+			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 55) / 15);
+		} else {
+			outColor = vec4(0.450, 0.937, 0.968, 1.0);
+		}
     }
 )glsl";
 // ==== Screen ---
@@ -168,12 +183,12 @@ void renderingThread(sf::Window* window)
 	{
 		glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
 		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		specifySceneVertexAttributes(sceneShaderProgram);
 		//drawArrays
 	}
 
 	// Specify the layout of the vertex data
 	glBindVertexArray(vaoWorld);
-	specifySceneVertexAttributes(sceneShaderProgram);
 
 	// Load the one texture
 	// GLuint blockTexture = loadTexture("./content/block.png");
@@ -237,7 +252,7 @@ void renderingThread(sf::Window* window)
 
 	GLint uniView = glGetUniformLocation(sceneShaderProgram, "view");
 
-	glm::mat4 proj = glm::perspective(glm::radians(90.0f), (float)screenSize[0] / screenSize[1], 0.0001f, 100.0f);
+	glm::mat4 proj = glm::perspective(glm::radians(90.0f), (float)screenSize[0] / screenSize[1], 0.0001f, 8.0f);
 	GLint uniProj = glGetUniformLocation(sceneShaderProgram, "proj");
 	glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
 
@@ -248,6 +263,7 @@ void renderingThread(sf::Window* window)
 	glUniform1f(glGetUniformLocation(sceneShaderProgram, "scale"), blockScale);
 
 	GLint uniPlayerPosition = glGetUniformLocation(sceneShaderProgram, "playerPosition");
+	GLint uniShowFog = glGetUniformLocation(sceneShaderProgram, "showFog");
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_FRONT);
@@ -265,6 +281,9 @@ void renderingThread(sf::Window* window)
 	int totalFrameCount = 0;
 	auto startTime = std::chrono::high_resolution_clock::now();
 	bool logFPStoConsole = false;
+	bool showFog = true;
+
+	glUniform1ui(uniShowFog, showFog);
 
 	while (gameRunning)
 	{
@@ -292,6 +311,14 @@ void renderingThread(sf::Window* window)
 		glBindVertexArray(vaoWorld);
 		glEnable(GL_DEPTH_TEST);
 		glUseProgram(sceneShaderProgram);
+
+		// Update uniforms
+		if (updateFog)
+		{
+			updateFog = false;
+			showFog = !showFog;
+			glUniform1ui(uniShowFog, showFog);
+		}
 
 		float scaledPlayerPos[3] = { position.x * blockScale, position.y * blockScale, position.z * blockScale };
 
@@ -326,10 +353,10 @@ void renderingThread(sf::Window* window)
 		updateChunkCoords.clear();
 		updateChunkMultex.unlock();
 
+		// specifySceneVertexAttributes(sceneShaderProgram);
 		for (int i = 0; i < chunksAmt * chunksAmt; i++)
 		{
 			glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
-			glEnableVertexAttribArray(vboChunks[i]);
 			// x, y, draw (bool)
 			if (!chunkIds[i][2] || !(chunkIds[i][0] >= chunkBoundaries[0][0] && chunkIds[i][0] <= chunkBoundaries[0][1] && chunkIds[i][1] >= chunkBoundaries[1][0] && chunkIds[i][1] <= chunkBoundaries[1][1]))
 			{
@@ -337,6 +364,7 @@ void renderingThread(sf::Window* window)
 				int vectorSize = newVerticies.size();
 				if (vectorSize > 0 && VBOuploads < GPUchunkUploadLimit)
 				{
+					// glEnableVertexArray(vboChunks[i]);
 					auto newChunkInfo = newVerticies[vectorSize - 1];
 					newVerticies.pop_back();
 					if (newChunkInfo.first[0] >= chunkBoundaries[0][0] && newChunkInfo.first[0] <= chunkBoundaries[0][1] && newChunkInfo.first[1] >= chunkBoundaries[1][0] && newChunkInfo.first[1] <= chunkBoundaries[1][1])
@@ -348,6 +376,7 @@ void renderingThread(sf::Window* window)
 
 						glBufferData(GL_ARRAY_BUFFER, sizeof(float) * newChunkInfo.second.size(), newChunkInfo.second.data(), GL_DYNAMIC_DRAW);
 						chunkVetexSizes[i] = newChunkInfo.second.size() / 6;
+						// specifySceneVertexAttributes(sceneShaderProgram);
 					}
 				}
 				ChunkVerticiesMutex.unlock();
@@ -377,8 +406,13 @@ void renderingThread(sf::Window* window)
 			totalFrameCount++;
 			auto now = std::chrono::high_resolution_clock::now();
 			float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - startTime).count();
-			UNUSED(timeDiff);
-			// std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
+			// UNUSED(timeDiff);
+			std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
+			if (timeDiff > 0.5f)
+			{
+				startTime = std::chrono::high_resolution_clock::now();
+				totalFrameCount = 0;
+			}
 		}
 	}
 
@@ -529,7 +563,6 @@ bool pointIsAir(float x, float y, float z)
 
 	if (currentlySavedChunk[0] != currentChunk[0] || currentlySavedChunk[1] != currentChunk[1] || spawnChunksLoaded || !collisionChunkIsLoaded)
 	{
-		spawnChunksLoaded = false;
 		bool newChunkLoaded = false;
 		ChunkMapMutex.lock();
 		for (chunkXitr = chunkMap.begin(); chunkXitr != chunkMap.end(); chunkXitr++)
@@ -761,6 +794,7 @@ int main()
 	bool flying = false;
 	bool mouseUpLeft = false;
 	bool mouseUpRight = false;
+	bool fPressed = false;
 
 	bool cPressed = false;
 
@@ -989,17 +1023,29 @@ int main()
 			}
 
 			// Other keyboard checks
+			// Flying toggle
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::C))
 			{
 				if (!cPressed)
 				{
 					flying = !flying;
 					cPressed = true;
-					sf::sleep(sf::milliseconds(50));
 				}
 			}
 			else
 				cPressed = false;
+
+			// Fog toggle
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::F))
+			{
+				if (!fPressed)
+				{
+					fPressed = true;
+					updateFog = true;
+				}
+			}
+			else
+				fPressed = false;
 
 			if (onFloor || flying)
 			{
