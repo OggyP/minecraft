@@ -68,6 +68,8 @@ std::map<int, std::map<int, std::array<GLuint, 2>>> bufferMap;
 const GLchar* sceneVertexSource = R"glsl(
     #version 150 core
 
+	uniform vec3 playerPosition;
+
     in vec3 position;
     in vec2 texcoord;
 	in float brightness;
@@ -82,7 +84,7 @@ const GLchar* sceneVertexSource = R"glsl(
 
     void main()
     {
-        gl_Position =  proj * view * model * vec4(position * scale, 1.0);
+        gl_Position =  proj * view * model * vec4((position * scale) - playerPosition, 1.0);
         texCoord = texcoord;
 		Brightness = brightness;
     }
@@ -245,6 +247,8 @@ void renderingThread(sf::Window* window)
 
 	glUniform1f(glGetUniformLocation(sceneShaderProgram, "scale"), blockScale);
 
+	GLint uniPlayerPosition = glGetUniformLocation(sceneShaderProgram, "playerPosition");
+
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_FRONT);
 
@@ -291,9 +295,11 @@ void renderingThread(sf::Window* window)
 
 		float scaledPlayerPos[3] = { position.x * blockScale, position.y * blockScale, position.z * blockScale };
 
+		glUniform3f(uniPlayerPosition, scaledPlayerPos[0], scaledPlayerPos[1], scaledPlayerPos[2]);
+
 		glm::mat4 view = glm::lookAt(
-			glm::vec3(scaledPlayerPos[0], scaledPlayerPos[1], scaledPlayerPos[2]),
-			glm::vec3(lookingAt.x + scaledPlayerPos[0], lookingAt.y + scaledPlayerPos[1], lookingAt.z + scaledPlayerPos[2]),
+			glm::vec3(0, 0, 0),
+			glm::vec3(lookingAt.x, lookingAt.y, lookingAt.z),
 			glm::vec3(0.0f, 0.0f, 1.0f));
 		glUniformMatrix4fv(uniView, 1, GL_FALSE, glm::value_ptr(view));
 
@@ -703,7 +709,7 @@ int main()
 	std::cout << "Hello World! Debug Mode Enabled." << std::endl;
 #endif
 	sf::ContextSettings settings;
-	settings.depthBits = 32;
+	settings.depthBits = 24;
 	settings.stencilBits = 8;
 	settings.antialiasingLevel = 2; // Optional
 	// Request OpenGL version 3.2
