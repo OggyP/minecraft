@@ -1,10 +1,10 @@
 # Minecraft in C++ and OpenGL
 
-This is a bad minecraft clone and my first OpenGL application I have made that wasn't from a tutorial.
+This is a bad Minecraft clone and my first OpenGL application I have made that wasn't from a tutorial.
 
 ## Controls
 
-The controls are the same as minecraft's controls.
+The controls are the same as Minecraft's controls.
 
 > Use the mouse to look around.
 
@@ -23,5 +23,3 @@ The controls are the same as minecraft's controls.
 > Add more than one block
 
 > Lighting
-
-> Seeds
