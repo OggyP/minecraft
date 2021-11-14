@@ -48,6 +48,9 @@ const int GPUchunkUploadLimit = 10000000;
 
 bool spawnChunksLoaded = false;
 
+// Input changes
+bool updateFog = false;
+
 // map of chunks
 sf::Mutex ChunkMapMutex;
 std::map<int, std::map<int, GameChunk>> chunkMap;
@@ -76,6 +79,7 @@ const GLchar* sceneVertexSource = R"glsl(
 
     out vec2 texCoord;
 	out float Brightness;
+	out float distanceFromPlayer;
 
 	uniform mat4 model;
 	uniform mat4 view;
@@ -84,9 +88,11 @@ const GLchar* sceneVertexSource = R"glsl(
 
     void main()
     {
-        gl_Position =  proj * view * model * vec4((position * scale) - playerPosition, 1.0);
+		vec4 newPos = vec4((position * scale) - playerPosition, 1.0);
+        gl_Position =  proj * view * model * newPos;
         texCoord = texcoord;
 		Brightness = brightness;
+		distanceFromPlayer = sqrt(newPos.x * newPos.x + newPos.y * newPos.y + newPos.z * newPos.z);
     }
 )glsl";
 // Fragment
@@ -95,14 +101,23 @@ const GLchar* sceneFragmentSource = R"glsl(
 
     in vec2 texCoord;
 	in float Brightness;
+	in float distanceFromPlayer;
 
     out vec4 outColor;
 
 	uniform sampler2D blockTexture;
+	uniform bool showFog;
 
     void main()
     {
-        outColor = texture(blockTexture, texCoord) * Brightness;
+		if (!showFog || distanceFromPlayer < 6) {
+        	outColor = texture(blockTexture, texCoord) * Brightness;
+		}
+		else if (distanceFromPlayer < 9) {
+			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 6) / 3);
+		} else {
+			outColor = vec4(0.450, 0.937, 0.968, 1.0);
+		}
     }
 )glsl";
 // ==== Screen ---
@@ -248,6 +263,7 @@ void renderingThread(sf::Window* window)
 	glUniform1f(glGetUniformLocation(sceneShaderProgram, "scale"), blockScale);
 
 	GLint uniPlayerPosition = glGetUniformLocation(sceneShaderProgram, "playerPosition");
+	GLint uniShowFog = glGetUniformLocation(sceneShaderProgram, "showFog");
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_FRONT);
@@ -265,6 +281,9 @@ void renderingThread(sf::Window* window)
 	int totalFrameCount = 0;
 	auto startTime = std::chrono::high_resolution_clock::now();
 	bool logFPStoConsole = false;
+	bool showFog = true;
+
+	glUniform1ui(uniShowFog, showFog);
 
 	while (gameRunning)
 	{
@@ -292,6 +311,14 @@ void renderingThread(sf::Window* window)
 		glBindVertexArray(vaoWorld);
 		glEnable(GL_DEPTH_TEST);
 		glUseProgram(sceneShaderProgram);
+
+		// Update uniforms
+		if (updateFog)
+		{
+			updateFog = false;
+			showFog = !showFog;
+			glUniform1ui(uniShowFog, showFog);
+		}
 
 		float scaledPlayerPos[3] = { position.x * blockScale, position.y * blockScale, position.z * blockScale };
 
@@ -761,6 +788,7 @@ int main()
 	bool flying = false;
 	bool mouseUpLeft = false;
 	bool mouseUpRight = false;
+	bool fPressed = false;
 
 	bool cPressed = false;
 
@@ -989,17 +1017,29 @@ int main()
 			}
 
 			// Other keyboard checks
+			// Flying toggle
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::C))
 			{
 				if (!cPressed)
 				{
 					flying = !flying;
 					cPressed = true;
-					sf::sleep(sf::milliseconds(50));
 				}
 			}
 			else
 				cPressed = false;
+
+			// Fog toggle
+			if (sf::Keyboard::isKeyPressed(sf::Keyboard::F))
+			{
+				if (!fPressed)
+				{
+					fPressed = true;
+					updateFog = true;
+				}
+			}
+			else
+				fPressed = false;
 
 			if (onFloor || flying)
 			{
