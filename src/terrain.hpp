@@ -9,7 +9,7 @@ std::random_device rd;
 std::default_random_engine generator(rd());
 
 /* Distribution on which to apply the generator */
-std::uniform_int_distribution<unsigned> distribution(0, 0xFFFFFF);
+std::uniform_int_distribution<unsigned> distribution(0, 0xFFFF);
 
 std::array<unsigned, 2> seed = { distribution(generator), distribution(generator) };
 
