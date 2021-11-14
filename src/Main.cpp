@@ -178,17 +178,14 @@ void renderingThread(sf::Window* window)
 	GLuint sceneVertexShader, sceneFragmentShader, sceneShaderProgram;
 	createShaderProgram(sceneVertexSource, sceneFragmentSource, sceneVertexShader, sceneFragmentShader, sceneShaderProgram);
 
-	glBindVertexArray(vaoWorld);
+	specifySceneVertexAttributes(sceneShaderProgram);
+
 	for (int i = 0; i < (2 * renderDistance + 1) * (2 * renderDistance + 1); i++)
 	{
 		glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
 		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-		specifySceneVertexAttributes(sceneShaderProgram);
 		//drawArrays
 	}
-
-	// Specify the layout of the vertex data
-	glBindVertexArray(vaoWorld);
 
 	// Load the one texture
 	// GLuint blockTexture = loadTexture("./content/block.png");
@@ -353,13 +350,12 @@ void renderingThread(sf::Window* window)
 		updateChunkCoords.clear();
 		updateChunkMultex.unlock();
 
-		// specifySceneVertexAttributes(sceneShaderProgram);
 		for (int i = 0; i < chunksAmt * chunksAmt; i++)
 		{
-			glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
 			// x, y, draw (bool)
 			if (!chunkIds[i][2] || !(chunkIds[i][0] >= chunkBoundaries[0][0] && chunkIds[i][0] <= chunkBoundaries[0][1] && chunkIds[i][1] >= chunkBoundaries[1][0] && chunkIds[i][1] <= chunkBoundaries[1][1]))
 			{
+				glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
 				ChunkVerticiesMutex.lock();
 				int vectorSize = newVerticies.size();
 				if (vectorSize > 0 && VBOuploads < GPUchunkUploadLimit)
@@ -376,13 +372,13 @@ void renderingThread(sf::Window* window)
 
 						glBufferData(GL_ARRAY_BUFFER, sizeof(float) * newChunkInfo.second.size(), newChunkInfo.second.data(), GL_DYNAMIC_DRAW);
 						chunkVetexSizes[i] = newChunkInfo.second.size() / 6;
-						// specifySceneVertexAttributes(sceneShaderProgram);
 					}
 				}
 				ChunkVerticiesMutex.unlock();
 			}
 			if (chunkIds[i][2])
 			{
+				glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
 				specifySceneVertexAttributes(sceneShaderProgram);
 				glDrawArrays(GL_TRIANGLES, 0, chunkVetexSizes[i]);
 			}
@@ -766,8 +762,8 @@ int main()
 	window.setMouseCursorGrabbed(true);
 	window.setMouseCursorVisible(false);
 #endif
-	window.setVerticalSyncEnabled(true);
-	window.setFramerateLimit(60);
+	// window.setVerticalSyncEnabled(true);
+	// window.setFramerateLimit(60);
 
 	screenSize[0] = window.getSize().x;
 	screenSize[1] = window.getSize().y;
