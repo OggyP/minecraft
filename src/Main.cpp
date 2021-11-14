@@ -92,7 +92,7 @@ const GLchar* sceneVertexSource = R"glsl(
         gl_Position =  proj * view * model * newPos;
         texCoord = texcoord;
 		Brightness = brightness;
-		distanceFromPlayer = sqrt(newPos.x * newPos.x + newPos.y * newPos.y + newPos.z * newPos.z);
+		distanceFromPlayer = newPos.x * newPos.x + newPos.y * newPos.y + newPos.z * newPos.z;
     }
 )glsl";
 // Fragment
@@ -110,11 +110,11 @@ const GLchar* sceneFragmentSource = R"glsl(
 
     void main()
     {
-		if (!showFog || distanceFromPlayer < 6) {
+		if (!showFog || distanceFromPlayer < 55) {
         	outColor = texture(blockTexture, texCoord) * Brightness;
 		}
-		else if (distanceFromPlayer < 9) {
-			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 6) / 3);
+		else if (distanceFromPlayer < 70) {
+			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 55) / 15);
 		} else {
 			outColor = vec4(0.450, 0.937, 0.968, 1.0);
 		}
@@ -183,12 +183,12 @@ void renderingThread(sf::Window* window)
 	{
 		glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
 		glVertexAttribPointer((GLuint)0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+		specifySceneVertexAttributes(sceneShaderProgram);
 		//drawArrays
 	}
 
 	// Specify the layout of the vertex data
 	glBindVertexArray(vaoWorld);
-	specifySceneVertexAttributes(sceneShaderProgram);
 
 	// Load the one texture
 	// GLuint blockTexture = loadTexture("./content/block.png");
@@ -252,7 +252,7 @@ void renderingThread(sf::Window* window)
 
 	GLint uniView = glGetUniformLocation(sceneShaderProgram, "view");
 
-	glm::mat4 proj = glm::perspective(glm::radians(90.0f), (float)screenSize[0] / screenSize[1], 0.0001f, 100.0f);
+	glm::mat4 proj = glm::perspective(glm::radians(90.0f), (float)screenSize[0] / screenSize[1], 0.0001f, 8.0f);
 	GLint uniProj = glGetUniformLocation(sceneShaderProgram, "proj");
 	glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
 
@@ -353,10 +353,10 @@ void renderingThread(sf::Window* window)
 		updateChunkCoords.clear();
 		updateChunkMultex.unlock();
 
+		// specifySceneVertexAttributes(sceneShaderProgram);
 		for (int i = 0; i < chunksAmt * chunksAmt; i++)
 		{
 			glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
-			glEnableVertexAttribArray(vboChunks[i]);
 			// x, y, draw (bool)
 			if (!chunkIds[i][2] || !(chunkIds[i][0] >= chunkBoundaries[0][0] && chunkIds[i][0] <= chunkBoundaries[0][1] && chunkIds[i][1] >= chunkBoundaries[1][0] && chunkIds[i][1] <= chunkBoundaries[1][1]))
 			{
@@ -364,6 +364,7 @@ void renderingThread(sf::Window* window)
 				int vectorSize = newVerticies.size();
 				if (vectorSize > 0 && VBOuploads < GPUchunkUploadLimit)
 				{
+					// glEnableVertexArray(vboChunks[i]);
 					auto newChunkInfo = newVerticies[vectorSize - 1];
 					newVerticies.pop_back();
 					if (newChunkInfo.first[0] >= chunkBoundaries[0][0] && newChunkInfo.first[0] <= chunkBoundaries[0][1] && newChunkInfo.first[1] >= chunkBoundaries[1][0] && newChunkInfo.first[1] <= chunkBoundaries[1][1])
@@ -375,6 +376,7 @@ void renderingThread(sf::Window* window)
 
 						glBufferData(GL_ARRAY_BUFFER, sizeof(float) * newChunkInfo.second.size(), newChunkInfo.second.data(), GL_DYNAMIC_DRAW);
 						chunkVetexSizes[i] = newChunkInfo.second.size() / 6;
+						// specifySceneVertexAttributes(sceneShaderProgram);
 					}
 				}
 				ChunkVerticiesMutex.unlock();
@@ -404,8 +406,13 @@ void renderingThread(sf::Window* window)
 			totalFrameCount++;
 			auto now = std::chrono::high_resolution_clock::now();
 			float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - startTime).count();
-			UNUSED(timeDiff);
-			// std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
+			// UNUSED(timeDiff);
+			std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
+			if (timeDiff > 0.5f)
+			{
+				startTime = std::chrono::high_resolution_clock::now();
+				totalFrameCount = 0;
+			}
 		}
 	}
 
@@ -556,7 +563,6 @@ bool pointIsAir(float x, float y, float z)
 
 	if (currentlySavedChunk[0] != currentChunk[0] || currentlySavedChunk[1] != currentChunk[1] || spawnChunksLoaded || !collisionChunkIsLoaded)
 	{
-		spawnChunksLoaded = false;
 		bool newChunkLoaded = false;
 		ChunkMapMutex.lock();
 		for (chunkXitr = chunkMap.begin(); chunkXitr != chunkMap.end(); chunkXitr++)
