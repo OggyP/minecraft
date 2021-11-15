@@ -110,11 +110,11 @@ const GLchar* sceneFragmentSource = R"glsl(
 
     void main()
     {
-		if (!showFog || distanceFromPlayer < 55) {
+		if (!showFog || distanceFromPlayer < 35) {
         	outColor = texture(blockTexture, texCoord) * Brightness;
 		}
 		else if (distanceFromPlayer < 70) {
-			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 55) / 15);
+			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 35) / 35);
 		} else {
 			outColor = vec4(0.450, 0.937, 0.968, 1.0);
 		}
@@ -798,7 +798,7 @@ int main()
 
 	// Constants
 	const float gravity = 0.0093f;
-	const float jumpHeight = 2.0f;
+	const float jumpHeight = 1.5f;
 	// Handle all input
 	sf::Clock deltaClock;
 	sf::Event event;
