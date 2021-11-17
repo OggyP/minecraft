@@ -110,11 +110,11 @@ const GLchar* sceneFragmentSource = R"glsl(
 
     void main()
     {
-		if (!showFog || distanceFromPlayer < 55) {
+		if (!showFog || distanceFromPlayer < 45) {
         	outColor = texture(blockTexture, texCoord) * Brightness;
 		}
-		else if (distanceFromPlayer < 70) {
-			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 55) / 15);
+		else if (distanceFromPlayer < 90) {
+			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 45) / 45);
 		} else {
 			outColor = vec4(0.450, 0.937, 0.968, 1.0);
 		}
@@ -249,7 +249,7 @@ void renderingThread(sf::Window* window)
 
 	GLint uniView = glGetUniformLocation(sceneShaderProgram, "view");
 
-	glm::mat4 proj = glm::perspective(glm::radians(90.0f), (float)screenSize[0] / screenSize[1], 0.0001f, 8.0f);
+	glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)screenSize[0] / screenSize[1], 0.001f, 9.0f);
 	GLint uniProj = glGetUniformLocation(sceneShaderProgram, "proj");
 	glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
 
@@ -798,7 +798,7 @@ int main()
 
 	// Constants
 	const float gravity = 0.0093f;
-	const float jumpHeight = 2.0f;
+	const float jumpHeight = 1.7f;
 	// Handle all input
 	sf::Clock deltaClock;
 	sf::Event event;
