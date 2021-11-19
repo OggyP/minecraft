@@ -810,6 +810,7 @@ int main()
 	// Constants
 	const float gravity = 0.0093f;
 	const float jumpHeight = 1.7f;
+
 	// Handle all input
 	sf::Clock deltaClock;
 	sf::Event event;
