@@ -110,11 +110,11 @@ const GLchar* sceneFragmentSource = R"glsl(
 
     void main()
     {
-		if (!showFog || distanceFromPlayer < 35) {
+		if (!showFog || distanceFromPlayer < 45) {
         	outColor = texture(blockTexture, texCoord) * Brightness;
 		}
-		else if (distanceFromPlayer < 70) {
-			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 35) / 35);
+		else if (distanceFromPlayer < 90) {
+			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 45) / 45);
 		} else {
 			outColor = vec4(0.450, 0.937, 0.968, 1.0);
 		}
@@ -249,7 +249,7 @@ void renderingThread(sf::Window* window)
 
 	GLint uniView = glGetUniformLocation(sceneShaderProgram, "view");
 
-	glm::mat4 proj = glm::perspective(glm::radians(90.0f), (float)screenSize[0] / screenSize[1], 0.0001f, 8.0f);
+	glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)screenSize[0] / screenSize[1], 0.001f, 9.0f);
 	GLint uniProj = glGetUniformLocation(sceneShaderProgram, "proj");
 	glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
 
@@ -274,21 +274,26 @@ void renderingThread(sf::Window* window)
 	}
 	// std::fill_n(chunkIds, chunksAmt * chunksAmt, defaultVal);
 
+#if defined(_DEBUG)
 	// the rendering loop
 	int totalFrameCount = 0;
 	auto startTime = std::chrono::high_resolution_clock::now();
 	bool logFPStoConsole = false;
+#endif
+
 	bool showFog = true;
 
 	glUniform1ui(uniShowFog, showFog);
 
 	while (gameRunning)
 	{
+#if defined(_DEBUG)
 		if (spawnChunksLoaded && !logFPStoConsole)
 		{
 			startTime = std::chrono::high_resolution_clock::now();
 			logFPStoConsole = true;
 		}
+#endif
 
 		if (screenResize)
 		{
@@ -397,19 +402,21 @@ void renderingThread(sf::Window* window)
 
 		// end the current frame -- this is a rendering function (it requires the context to be active)
 		window->display();
+#if defined(_DEBUG)
 		if (logFPStoConsole)
 		{
 			totalFrameCount++;
 			auto now = std::chrono::high_resolution_clock::now();
 			float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - startTime).count();
-			// UNUSED(timeDiff);
-			std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
+			UNUSED(timeDiff);
+			// std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
 			if (timeDiff > 0.5f)
 			{
 				startTime = std::chrono::high_resolution_clock::now();
 				totalFrameCount = 0;
 			}
 		}
+#endif
 	}
 
 	// close
@@ -590,7 +597,7 @@ bool pointIsAir(float x, float y, float z)
 	}
 	if (collisionChunkIsLoaded)
 	{
-		if (savedChunk->tiles[currentBlock[0]][currentBlock[1]][currentBlock[2]] == 0)
+		if (savedChunk->tiles[currentBlock[0]][currentBlock[1]][currentBlock[2]].blockType == 0)
 		{
 			return true;
 		}
@@ -749,8 +756,12 @@ int main()
 #if defined(_DEBUG)
 	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft DEBUGGING MODE", sf::Style::Resize | sf::Style::Close, settings);
 #else
+	#if defined(__linux__)
+	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Resize | sf::Style::Fullscreen | sf::Style::Close, settings);
+	#else
 	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Resize | sf::Style::Close, settings);
 	platform.toggleFullscreen(window.getSystemHandle(), sf::Style::Fullscreen, false, sf::Vector2u(sf::VideoMode::getDesktopMode().width, sf::VideoMode::getDesktopMode().height));
+	#endif
 #endif
 	std::cout << sf::VideoMode::getDesktopMode().width << "\n";
 	platform.setIcon(window.getSystemHandle());
@@ -798,7 +809,8 @@ int main()
 
 	// Constants
 	const float gravity = 0.0093f;
-	const float jumpHeight = 1.5f;
+	const float jumpHeight = 1.7f;
+
 	// Handle all input
 	sf::Clock deltaClock;
 	sf::Event event;
@@ -806,6 +818,8 @@ int main()
 	{
 		sf::Time dt = deltaClock.restart();
 		float deltaTimeMovementSpeed = movementSpeed * (float)dt.asMicroseconds() / 10000.0f;
+		if (deltaTimeMovementSpeed > 0.04f)
+			deltaTimeMovementSpeed = 0.04f;
 		float deltaTimeMouseSmoothing = mouseSmoothing * (float)dt.asSeconds();
 		if (deltaTimeMouseSmoothing > 0.05f)
 			deltaTimeMouseSmoothing = 0.05f;
@@ -892,7 +906,7 @@ int main()
 						{
 							chunkBlock[1] += chunkSize;
 						}
-						collidedChunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]] = 0;
+						collidedChunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockType = 0;
 						updateChunks(chunkBlock[0], chunkBlock[1], collidedChunk);
 					}
 				}
@@ -961,7 +975,7 @@ int main()
 							{
 								chunkBlock[1] += chunkSize;
 							}
-							collidePoint.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]] = 1;
+							collidePoint.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockType = 1;
 							updateChunks(chunkBlock[0], chunkBlock[1], collidePoint.chunk);
 						}
 					}
@@ -1011,11 +1025,11 @@ int main()
 			}
 			else
 			{
-				movementVector.z = 0;
+				movementVector.z = 0.0f;
 				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
-					movementVector.z += deltaTimeMovementSpeed * 100;
+					movementVector.z += deltaTimeMovementSpeed * 100.0f;
 				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift))
-					movementVector.z -= deltaTimeMovementSpeed * 100;
+					movementVector.z -= deltaTimeMovementSpeed * 100.0f;
 			}
 
 			// Other keyboard checks
