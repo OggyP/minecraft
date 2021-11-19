@@ -590,7 +590,7 @@ bool pointIsAir(float x, float y, float z)
 	}
 	if (collisionChunkIsLoaded)
 	{
-		if (savedChunk->tiles[currentBlock[0]][currentBlock[1]][currentBlock[2]] == 0)
+		if (savedChunk->tiles[currentBlock[0]][currentBlock[1]][currentBlock[2]].blockType == 0)
 		{
 			return true;
 		}
@@ -747,10 +747,14 @@ int main()
 	settings.attributeFlags = sf::ContextSettings::Core;
 
 #if defined(_DEBUG)
-	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft DEBUGGING MODE", sf::Style::Resize | sf::Style::Close, settings);
+	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft DEBUGGING MODE", sf::Style::Resize | sf::Style::Fullscreen | sf::Style::Close, settings);
 #else
+	#if defined(__linux__)
+	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Resize | sf::Style::Fullscreen | sf::Style::Close, settings);
+	#else
 	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Resize | sf::Style::Close, settings);
 	platform.toggleFullscreen(window.getSystemHandle(), sf::Style::Fullscreen, false, sf::Vector2u(sf::VideoMode::getDesktopMode().width, sf::VideoMode::getDesktopMode().height));
+	#endif
 #endif
 	std::cout << sf::VideoMode::getDesktopMode().width << "\n";
 	platform.setIcon(window.getSystemHandle());
@@ -892,7 +896,7 @@ int main()
 						{
 							chunkBlock[1] += chunkSize;
 						}
-						collidedChunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]] = 0;
+						collidedChunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockType = 0;
 						updateChunks(chunkBlock[0], chunkBlock[1], collidedChunk);
 					}
 				}
@@ -961,7 +965,7 @@ int main()
 							{
 								chunkBlock[1] += chunkSize;
 							}
-							collidePoint.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]] = 1;
+							collidePoint.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockType = 1;
 							updateChunks(chunkBlock[0], chunkBlock[1], collidePoint.chunk);
 						}
 					}
