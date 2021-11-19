@@ -274,21 +274,26 @@ void renderingThread(sf::Window* window)
 	}
 	// std::fill_n(chunkIds, chunksAmt * chunksAmt, defaultVal);
 
+#if defined(_DEBUG)
 	// the rendering loop
 	int totalFrameCount = 0;
 	auto startTime = std::chrono::high_resolution_clock::now();
 	bool logFPStoConsole = false;
+#endif
+
 	bool showFog = true;
 
 	glUniform1ui(uniShowFog, showFog);
 
 	while (gameRunning)
 	{
+#if defined(_DEBUG)
 		if (spawnChunksLoaded && !logFPStoConsole)
 		{
 			startTime = std::chrono::high_resolution_clock::now();
 			logFPStoConsole = true;
 		}
+#endif
 
 		if (screenResize)
 		{
@@ -397,19 +402,21 @@ void renderingThread(sf::Window* window)
 
 		// end the current frame -- this is a rendering function (it requires the context to be active)
 		window->display();
+#if defined(_DEBUG)
 		if (logFPStoConsole)
 		{
 			totalFrameCount++;
 			auto now = std::chrono::high_resolution_clock::now();
 			float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - startTime).count();
-			// UNUSED(timeDiff);
-			std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
+			UNUSED(timeDiff);
+			// std::cout << "Frames: " << totalFrameCount / timeDiff << "\n";
 			if (timeDiff > 0.5f)
 			{
 				startTime = std::chrono::high_resolution_clock::now();
 				totalFrameCount = 0;
 			}
 		}
+#endif
 	}
 
 	// close
@@ -747,7 +754,7 @@ int main()
 	settings.attributeFlags = sf::ContextSettings::Core;
 
 #if defined(_DEBUG)
-	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft DEBUGGING MODE", sf::Style::Resize | sf::Style::Fullscreen | sf::Style::Close, settings);
+	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft DEBUGGING MODE", sf::Style::Resize | sf::Style::Close, settings);
 #else
 	#if defined(__linux__)
 	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Resize | sf::Style::Fullscreen | sf::Style::Close, settings);
@@ -810,6 +817,8 @@ int main()
 	{
 		sf::Time dt = deltaClock.restart();
 		float deltaTimeMovementSpeed = movementSpeed * (float)dt.asMicroseconds() / 10000.0f;
+		if (deltaTimeMovementSpeed > 0.04f)
+			deltaTimeMovementSpeed = 0.04f;
 		float deltaTimeMouseSmoothing = mouseSmoothing * (float)dt.asSeconds();
 		if (deltaTimeMouseSmoothing > 0.05f)
 			deltaTimeMouseSmoothing = 0.05f;
@@ -1015,11 +1024,11 @@ int main()
 			}
 			else
 			{
-				movementVector.z = 0;
+				movementVector.z = 0.0f;
 				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
-					movementVector.z += deltaTimeMovementSpeed * 100;
+					movementVector.z += deltaTimeMovementSpeed * 100.0f;
 				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift))
-					movementVector.z -= deltaTimeMovementSpeed * 100;
+					movementVector.z -= deltaTimeMovementSpeed * 100.0f;
 			}
 
 			// Other keyboard checks
