@@ -26,6 +26,7 @@ struct block
 {
 	int blockType;
 	float lightLevel;
+	float blockOffset[2] = {0, 0};
 };
 
 class GameChunk
@@ -71,6 +72,8 @@ public:
 					if (z <= noiseVal && SimplexNoise::noise(xVal3Dnoise, yVal3Dnoise, zVal) <= zCheckVal)
 					{
 						struct block newBlock;
+						newBlock.blockOffset[0] = 0.0f;
+						newBlock.blockOffset[1] = 0.0f;
 						newBlock.blockType = 1;
 						newBlock.lightLevel = 1.0f;
 						if (z <= noiseValMinus1)
@@ -92,6 +95,8 @@ public:
 					else
 					{
 						struct block newBlock;
+						newBlock.blockOffset[0] = 0.0f;
+						newBlock.blockOffset[1] = 0.0f;
 						newBlock.blockType = 0;
 						newBlock.lightLevel = 1.0f;
 						if (z <= noiseVal)
@@ -131,98 +136,134 @@ public:
 				{
 					if (tiles[x][y][z].blockType != 0)
 					{
+						auto currentBlock = &tiles[x][y][z];
 						// Up
 						const int blockCoords[2] = { chunkX * chunkSize + x, chunkY * chunkSize + y };
 						if (z + 1 >= chunkHeight || tiles[x][y][z + 1].blockType == 0)
 						{
-							float brightness = tiles[x][y][z].lightLevel;
+							float brightness = currentBlock->lightLevel;
 							std::vector<GLfloat> face = {
-								-0.5f + blockCoords[0], -0.5f + blockCoords[1], 0.5f + z, 0.0f, 0.0f, brightness, 0.5f + blockCoords[0], 0.5f + blockCoords[1], 0.5f + z, 1.0f, 1.0f, brightness, 0.5f + blockCoords[0], -0.5f + blockCoords[1], 0.5f + z, 1.0f, 0.0f, brightness, 0.5f + blockCoords[0], 0.5f + blockCoords[1], 0.5f + z, 1.0f, 1.0f, brightness, -0.5f + blockCoords[0], -0.5f + blockCoords[1], 0.5f + z, 0.0f, 0.0f, brightness, -0.5f + blockCoords[0], 0.5f + blockCoords[1], 0.5f + z, 0.0f, 1.0f, brightness
+								-0.5f + blockCoords[0],
+								-0.5f + blockCoords[1],
+								0.5f + z,
+								0.0f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
+								brightness,
+								0.5f + blockCoords[0],
+								0.5f + blockCoords[1],
+								0.5f + z,
+								0.1f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
+								brightness,
+								0.5f + blockCoords[0],
+								-0.5f + blockCoords[1],
+								0.5f + z,
+								0.1f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
+								brightness,
+								0.5f + blockCoords[0],
+								0.5f + blockCoords[1],
+								0.5f + z,
+								0.1f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
+								brightness,
+								-0.5f + blockCoords[0],
+								-0.5f + blockCoords[1],
+								0.5f + z,
+								0.0f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
+								brightness,
+								-0.5f + blockCoords[0],
+								0.5f + blockCoords[1],
+								0.5f + z,
+								0.0f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
+								brightness
 							};
 							chunkVertices.insert(chunkVertices.end(), face.begin(), face.end());
 						}
 						if (z - 1 < 0 || tiles[x][y][z - 1].blockType == 0)
 						{
-							float brightness = tiles[x][y][z].lightLevel * 0.7f;
+							float brightness = currentBlock->lightLevel * 0.7f;
 							std::vector<GLfloat> face = {
 								-0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								0.0f,
-								1.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness, // Down
 								0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
-								1.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
-								0.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
-								0.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								-0.5f + z,
-								0.0f,
-								0.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								0.0f,
-								1.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness
 							};
 							chunkVertices.insert(chunkVertices.end(), face.begin(), face.end());
 						}
 						if ((x - 1 >= 0 && tiles[x - 1][y][z].blockType == 0) || (x - 1 < 0 && MinusX->tiles[15 - x][y][z].blockType == 0))
 						{
-							float brightness = tiles[x][y][z].lightLevel * 0.75f;
+							float brightness = currentBlock->lightLevel * 0.75f;
 							std::vector<GLfloat> face = {
 								-0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								0.5f + z,
-								0.0f,
-								0.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
-								1.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
-								0.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
-								1.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								0.5f + z,
-								0.0f,
-								0.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								0.5f + z,
-								0.0f,
-								1.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness
 							};
 							chunkVertices.insert(chunkVertices.end(), face.begin(), face.end());
@@ -230,129 +271,129 @@ public:
 						if ((x + 1 < chunkSize && tiles[x + 1][y][z].blockType == 0) || (x + 1 >= chunkSize && PlusX->tiles[15 - x][y][z].blockType == 0))
 						{
 							// Plus X
-							float brightness = tiles[x][y][z].lightLevel * 0.75f;
+							float brightness = currentBlock->lightLevel * 0.75f;
 							std::vector<GLfloat> face = {
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								0.5f + z,
-								1.0f,
-								0.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
-								1.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								0.0f,
-								1.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								0.0f,
-								1.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								0.5f + z,
-								0.0f,
-								0.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								0.5f + z,
-								1.0f,
-								0.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 							};
 							chunkVertices.insert(chunkVertices.end(), face.begin(), face.end());
 						}
 						if ((y + 1 < chunkSize && tiles[x][y + 1][z].blockType == 0) || (y + 1 >= chunkSize && PlusY->tiles[x][15 - y][z].blockType == 0))
 						{
-							float brightness = tiles[x][y][z].lightLevel * 0.86f;
+							float brightness = currentBlock->lightLevel * 0.86f;
 							std::vector<GLfloat> face = {
 								-0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								-0.5f + z,
-								0.0f,
-								1.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
-								1.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								0.5f + z,
-								1.0f,
-								0.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								0.5f + z,
-								1.0f,
-								0.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								0.5f + z,
-								0.0f,
-								0.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								0.5f + blockCoords[1],
 								-0.5f + z,
-								0.0f,
-								1.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness
 							};
 							chunkVertices.insert(chunkVertices.end(), face.begin(), face.end());
 						}
 						if ((y - 1 >= 0 && tiles[x][y - 1][z].blockType == 0) || (y - 1 < 0 && MinusY->tiles[x][15 - y][z].blockType == 0))
 						{
-							float brightness = tiles[x][y][z].lightLevel * 0.86f;
+							float brightness = currentBlock->lightLevel * 0.86f;
 							std::vector<GLfloat> face = {
 								-0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								0.0f,
-								0.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								0.5f + z,
-								1.0f,
-								1.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								1.0f,
-								0.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								0.5f + z,
-								1.0f,
-								1.0f,
+								0.1f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								-0.5f + z,
-								0.0f,
-								0.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.0f + currentBlock->blockOffset[1],
 								brightness,
 								-0.5f + blockCoords[0],
 								-0.5f + blockCoords[1],
 								0.5f + z,
-								0.0f,
-								1.0f,
+								0.0f + currentBlock->blockOffset[0],
+								0.1f + currentBlock->blockOffset[1],
 								brightness
 							};
 							chunkVertices.insert(chunkVertices.end(), face.begin(), face.end());
