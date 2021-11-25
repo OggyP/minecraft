@@ -13,5 +13,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: install libs
+      run: sudo apt install libsfml-dev libglm-dev libglew-dev
     - name: build
       run: ./build.sh buildprod Production
