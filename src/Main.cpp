@@ -193,7 +193,7 @@ void renderingThread(sf::Window* window)
 	glGenTextures(1, &blockTexture);
 
 	sf::Image imageLoad;
-	if (imageLoad.loadFromFile("./content/block.png"))
+	if (imageLoad.loadFromFile("./content/blocks.png"))
 	{
 		glBindTexture(GL_TEXTURE_2D, blockTexture);
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, imageLoad.getSize().x, imageLoad.getSize().y, 0, GL_RGBA, GL_UNSIGNED_BYTE, imageLoad.getPixelsPtr());
@@ -975,7 +975,8 @@ int main()
 							{
 								chunkBlock[1] += chunkSize;
 							}
-							collidePoint.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockType = 1;
+							collidePoint.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockType = 2;
+							collidePoint.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockOffset[0] = 0.125f;
 							updateChunks(chunkBlock[0], chunkBlock[1], collidePoint.chunk);
 						}
 					}
