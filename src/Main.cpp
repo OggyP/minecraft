@@ -646,11 +646,10 @@ void updateChunks(int blockX, int blockY, GameChunk* collidedChunk)
 	ChunkVerticiesMutex.unlock();
 }
 
-struct foundCollision
+struct collisionPoint
 {
 	// Default Valuse
 	normalVector3i position;
-	float magnitude = 0.0f;
 	GameChunk* chunk = nullptr;
 	char sideClicked = 'L';
 	int collisionSide = 69; // Is going to be the negative of the normalised ray
@@ -662,79 +661,82 @@ struct foundCollision
  * @param[in] currentPosition Vector3f the origin of the ray
  * @param[in] rayDirection Vector3f the direction of the ray
  *
- * @return Vector of foundCollision.
+ * @return Standard pair of a boolean of if a ray collision was found and a `collisionPoint` containing the collision information
  */
-std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayDirection);
-std::vector<foundCollision> rayCollision(Vector3f currentPosition, Vector3f rayDirection)
+std::pair<bool, collisionPoint> rayCollision(Vector3f currentPosition, Vector3f rayDirection);
+std::pair<bool, collisionPoint> rayCollision(Vector3f currentPosition, Vector3f rayDirection)
 {
 	rayDirection.normalise(1.0f);
 
 	int originBlock[3] = { (int)floor((int)floor(currentPosition.x + 0.5f)), (int)floor((int)floor(currentPosition.y + 0.5f)), (int)floor(currentPosition.z + 0.5f) };
 	const int rayNormalised[3] = { (int)round(rayDirection.x / std::abs(rayDirection.x)), (int)round(rayDirection.y / std::abs(rayDirection.y)), (int)round(rayDirection.z / std::abs(rayDirection.z)) };
 
-	int x = originBlock[0] + rayNormalised[0];
-	int y = originBlock[1] + rayNormalised[1];
-	int z = originBlock[2] + rayNormalised[2];
+	int x = originBlock[0];
+	int y = originBlock[1];
+	int z = originBlock[2];
 
 	float scaleX = (((float)x + (-0.5f * (float)rayNormalised[0])) - currentPosition.x) / rayDirection.x;
 	float scaleY = (((float)y + (-0.5f * (float)rayNormalised[1])) - currentPosition.y) / rayDirection.y;
 	float scaleZ = (((float)z + (-0.5f * (float)rayNormalised[2])) - currentPosition.z) / rayDirection.z;
 
-	std::vector<foundCollision> collisionPoints;
-
 	while (scaleX < 5 || scaleY < 5 || scaleZ < 5)
 	{
-
-		if (!pointIsAir((float)x - 0.5f, (float)currentPosition.y + rayDirection.y * scaleX, (float)currentPosition.z + rayDirection.z * scaleX))
+		if (scaleX <= scaleY && scaleX <= scaleZ)
 		{
-			foundCollision collision;
-			collision.chunk = savedChunk;
-			collision.sideClicked = 'X';
-			collision.collisionSide = -rayNormalised[0];
-			collision.position.x = x;
-			collision.position.y = (int)floor(((float)currentPosition.y + rayDirection.y * scaleX) + 0.5f);
-			collision.position.z = (int)floor((float)currentPosition.z + rayDirection.z * scaleX + 0.5f);
-			collision.magnitude = pow(x - currentPosition.x, 2) + pow(rayDirection.y * scaleX, 2) + pow(rayDirection.z * scaleX, 2);
-			collisionPoints.push_back(collision);
+			if (!pointIsAir((float)x - 0.5f, (float)currentPosition.y + rayDirection.y * scaleX, (float)currentPosition.z + rayDirection.z * scaleX))
+			{
+				collisionPoint collision;
+				collision.chunk = savedChunk;
+				collision.sideClicked = 'X';
+				collision.collisionSide = -rayNormalised[0];
+				collision.position.x = x;
+				collision.position.y = (int)floor(((float)currentPosition.y + rayDirection.y * scaleX) + 0.5f);
+				collision.position.z = (int)floor((float)currentPosition.z + rayDirection.z * scaleX + 0.5f);
+				return std::make_pair(true, collision);
+			}
+
+			x += rayNormalised[0];
+			scaleX = (((float)x + (-0.5f * (float)rayNormalised[0])) - currentPosition.x) / rayDirection.x;
 		}
 
-		x += rayNormalised[0];
-		scaleX = (((float)x + (-0.5f * (float)rayNormalised[0])) - currentPosition.x) / rayDirection.x;
-
-		if (!pointIsAir((float)currentPosition.x + rayDirection.x * scaleY, (float)y - 0.5f, (float)currentPosition.z + rayDirection.z * scaleY))
+		if (scaleY <= scaleX && scaleY <= scaleZ)
 		{
-			foundCollision collision;
-			collision.chunk = savedChunk;
-			collision.sideClicked = 'Y';
-			collision.collisionSide = -rayNormalised[1];
-			collision.position.x = (int)floor(((float)currentPosition.x + rayDirection.x * scaleY) + 0.5f);
-			collision.position.y = y;
-			collision.position.z = (int)floor((float)currentPosition.z + rayDirection.z * scaleY + 0.5f);
-			collision.magnitude = pow(rayDirection.x * scaleY, 2) + pow(y - currentPosition.y, 2) + pow(rayDirection.z * scaleY, 2);
-			collisionPoints.push_back(collision);
+			if (!pointIsAir((float)currentPosition.x + rayDirection.x * scaleY, (float)y - 0.5f, (float)currentPosition.z + rayDirection.z * scaleY))
+			{
+				collisionPoint collision;
+				collision.chunk = savedChunk;
+				collision.sideClicked = 'Y';
+				collision.collisionSide = -rayNormalised[1];
+				collision.position.x = (int)floor(((float)currentPosition.x + rayDirection.x * scaleY) + 0.5f);
+				collision.position.y = y;
+				collision.position.z = (int)floor((float)currentPosition.z + rayDirection.z * scaleY + 0.5f);
+				return std::make_pair(true, collision);
+			}
+
+			y += rayNormalised[1];
+			scaleY = (((float)y + (-0.5f * (float)rayNormalised[1])) - currentPosition.y) / rayDirection.y;
 		}
 
-		y += rayNormalised[1];
-		scaleY = (((float)y + (-0.5f * (float)rayNormalised[1])) - currentPosition.y) / rayDirection.y;
-
-		if (!pointIsAir((float)currentPosition.x + rayDirection.x * scaleZ, (float)currentPosition.y + rayDirection.y * scaleZ, (float)z - 0.5f))
+		if (scaleZ <= scaleX && scaleZ <= scaleY)
 		{
-			foundCollision collision;
-			collision.chunk = savedChunk;
-			collision.sideClicked = 'Z';
-			collision.collisionSide = -rayNormalised[2];
-			collision.position.x = (int)floor((float)currentPosition.x + rayDirection.x * scaleZ + 0.5f);
-			collision.position.y = (int)floor((float)currentPosition.y + rayDirection.y * scaleZ + 0.5f);
-			collision.position.z = z;
-			collision.magnitude = pow(rayDirection.x * scaleZ, 2) + pow(rayDirection.y * scaleZ, 2) + pow(z - currentPosition.z, 2);
-			collisionPoints.push_back(collision);
-		}
+			if (!pointIsAir((float)currentPosition.x + rayDirection.x * scaleZ, (float)currentPosition.y + rayDirection.y * scaleZ, (float)z - 0.5f))
+			{
+				collisionPoint collision;
+				collision.chunk = savedChunk;
+				collision.sideClicked = 'Z';
+				collision.collisionSide = -rayNormalised[2];
+				collision.position.x = (int)floor((float)currentPosition.x + rayDirection.x * scaleZ + 0.5f);
+				collision.position.y = (int)floor((float)currentPosition.y + rayDirection.y * scaleZ + 0.5f);
+				collision.position.z = z;
+				return std::make_pair(true, collision);
+			}
 
-		z += rayNormalised[2];
-		scaleZ = (((float)z + (-0.5f * (float)rayNormalised[2])) - currentPosition.z) / rayDirection.z;
+			z += rayNormalised[2];
+			scaleZ = (((float)z + (-0.5f * (float)rayNormalised[2])) - currentPosition.z) / rayDirection.z;
+		}
 	}
 
-	return collisionPoints;
+	return std::make_pair(false, collisionPoint());
 }
 
 int main()
@@ -877,23 +879,10 @@ int main()
 				if (mouseUpLeft)
 				{
 					mouseUpLeft = false;
-					normalVector3i collidePoint;
-					auto collidePoints = rayCollision(position, lookingAt);
-					float minMagnitude = 1000000.0f;
-					bool chunkFound = false;
-					GameChunk* collidedChunk = nullptr;
-					for (const auto& point : collidePoints)
+					auto collision = rayCollision(position, lookingAt);
+					if (collision.first) // if a collision was found
 					{
-						if (point.magnitude < minMagnitude && point.magnitude <= 25.0f)
-						{
-							collidePoint = point.position;
-							minMagnitude = point.magnitude;
-							collidedChunk = point.chunk;
-							chunkFound = true;
-						}
-					}
-					if (chunkFound)
-					{
+						auto collidePoint = collision.second.position;
 						std::cout << "Clicked on " << collidePoint.x << " | " << collidePoint.y << " | " << collidePoint.z << "\n";
 						int chunkBlock[3] = { collidePoint.x % chunkSize, collidePoint.y % chunkSize, collidePoint.z };
 
@@ -906,8 +895,10 @@ int main()
 						{
 							chunkBlock[1] += chunkSize;
 						}
-						collidedChunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockType = 0;
-						updateChunks(chunkBlock[0], chunkBlock[1], collidedChunk);
+						ChunkMapMutex.lock();
+						collision.second.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockType = 0;
+						ChunkMapMutex.unlock();
+						updateChunks(chunkBlock[0], chunkBlock[1], collision.second.chunk);
 					}
 				}
 			}
@@ -920,19 +911,10 @@ int main()
 				{
 					int currentBlock[3] = { (int)floor((int)floor(position.x + 0.5f)), (int)floor((int)floor(position.y + 0.5f)), (int)floor(position.z + 0.5f) };
 					mouseUpRight = false;
-					foundCollision collidePoint;
-					auto collidePoints = rayCollision(position, lookingAt);
-					float minMagnitude = 1000000.0f;
-					for (const auto& point : collidePoints)
+					auto collision = rayCollision(position, lookingAt);
+					if (collision.first) // if a collision was found
 					{
-						if (point.magnitude < minMagnitude && point.magnitude <= 25.0f)
-						{
-							collidePoint = point;
-							minMagnitude = point.magnitude;
-						}
-					}
-					if (minMagnitude < 500000.0f)
-					{
+						auto collidePoint = collision.second;
 						std::cout << "Clicked on " << collidePoint.position.x << " | " << collidePoint.position.y << " | " << collidePoint.position.z << "\n";
 						int initChunkBlock[3] = { collidePoint.position.x % chunkSize, collidePoint.position.y % chunkSize, collidePoint.position.z };
 						int chunkOffsets[2] = { 0, 0 };
@@ -975,8 +957,10 @@ int main()
 							{
 								chunkBlock[1] += chunkSize;
 							}
+							ChunkMapMutex.lock();
 							collidePoint.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockType = 2;
 							collidePoint.chunk->tiles[chunkBlock[0]][chunkBlock[1]][chunkBlock[2]].blockOffset[0] = 0.125f;
+							ChunkMapMutex.unlock();
 							updateChunks(chunkBlock[0], chunkBlock[1], collidePoint.chunk);
 						}
 					}
