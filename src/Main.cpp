@@ -58,13 +58,11 @@ std::map<int, std::map<int, GameChunk>>::iterator chunkXitr;
 std::map<int, GameChunk>::iterator chunkYitr;
 
 // map of chunk verticies
-sf::Mutex ChunkVerticiesMutex;
-std::vector<std::pair<std::array<int, 2>, std::vector<GLfloat>>> newVerticies;
+sf::Mutex loadedChunkVerticiesMultex;
+std::map<std::array<int, 2>, std::vector<GLfloat>> loadedChunkVerticies;
 
-sf::Mutex updateChunkMultex;
-std::vector<std::array<int, 2>> updateChunkCoords;
-
-std::map<int, std::map<int, std::array<GLuint, 2>>> bufferMap;
+sf::Mutex updatedChunkVerticiesMultex;
+std::map<std::array<int, 2>, std::vector<GLfloat>> updatedChunkVerticies;
 
 // SHADERS =========================================
 // Vertex
@@ -148,6 +146,13 @@ const GLchar* screenFragmentSource = R"glsl(
 //============================
 
 #include "verticies.txt"
+
+struct chunkRenderInfo
+{
+	bool enabled = false;
+	bool updated = false;
+	normalVector2i pos;
+};
 
 void renderingThread(sf::Window* window);
 void renderingThread(sf::Window* window)
@@ -266,13 +271,8 @@ void renderingThread(sf::Window* window)
 	glCullFace(GL_FRONT);
 
 	// ChunkX, ChunkY, Chunk Enabled
-	std::array<std::array<int, 3>, chunksAmt * chunksAmt> chunkIds;
+	std::array<chunkRenderInfo, chunksAmt * chunksAmt> chunkInfoArray;
 	int chunkVetexSizes[chunksAmt * chunksAmt];
-	for (int i = 0; i < chunksAmt * chunksAmt; i++)
-	{
-		chunkIds[i] = { 0, 0, 0 };
-	}
-	// std::fill_n(chunkIds, chunksAmt * chunksAmt, defaultVal);
 
 #if defined(_DEBUG)
 	// the rendering loop
@@ -340,50 +340,89 @@ void renderingThread(sf::Window* window)
 		// Used to cap the max VBO uploads per frame
 		int VBOuploads = 0;
 
-		updateChunkMultex.lock();
-		if (updateChunkCoords.size() > 1)
+		loadedChunkVerticiesMultex.lock();
+		for (auto const& chunk : loadedChunkVerticies)
 		{
-			std::cout << updateChunkCoords.size() << "Chunks\n";
+			if (((chunk.first[0] >= chunkBoundaries[0][0] && chunk.first[0] <= chunkBoundaries[0][1] && chunk.first[1] >= chunkBoundaries[1][0] && chunk.first[1] <= chunkBoundaries[1][1])))
+			{
+				for (int i = 0; i < chunksAmt * chunksAmt; i++)
+				{
+					if ((chunkInfoArray[i].enabled && chunkInfoArray[i].pos.x == chunk.first[0] && chunkInfoArray[i].pos.y == chunk.first[1]))
+					{
+						loadedChunkVerticies.erase(chunk.first);
+						break;
+					}
+				}
+			}
+			else
+				loadedChunkVerticies.erase(chunk.first);
 		}
-		for (auto& array : updateChunkCoords) // access by reference to avoid copying
+		auto acceptedLoadedChunkVerticies = loadedChunkVerticies;
+		loadedChunkVerticies.clear();
+		loadedChunkVerticiesMultex.unlock();
+
+		updatedChunkVerticiesMultex.lock();
+		for (auto const& chunk : updatedChunkVerticies)
 		{
-			for (int i = 0; i < chunksAmt * chunksAmt; i++)
-				if (chunkIds[i][2])
-					if (chunkIds[i][0] == array[0] && chunkIds[i][1] == array[1])
-						chunkIds[i][2] = false;
+			if (((chunk.first[0] >= chunkBoundaries[0][0] && chunk.first[0] <= chunkBoundaries[0][1] && chunk.first[1] >= chunkBoundaries[1][0] && chunk.first[1] <= chunkBoundaries[1][1])))
+			{
+				bool foundChunkToUpdate = false;
+				for (int i = 0; i < chunksAmt * chunksAmt; i++)
+					if ((chunkInfoArray[i].enabled && chunkInfoArray[i].pos.x == chunk.first[0] && chunkInfoArray[i].pos.y == chunk.first[1]))
+					{
+						foundChunkToUpdate = true;
+						break;
+					}
+				if (!foundChunkToUpdate)
+					updatedChunkVerticies.erase(chunk.first);
+			}
+			else
+				updatedChunkVerticies.erase(chunk.first);
 		}
-		updateChunkCoords.clear();
-		updateChunkMultex.unlock();
+		auto acceptedUpdatedChunkVerticies = updatedChunkVerticies;
+		updatedChunkVerticies.clear();
+		updatedChunkVerticiesMultex.unlock();
 
 		for (int i = 0; i < chunksAmt * chunksAmt; i++)
 		{
-			// x, y, draw (bool)
-			if (!chunkIds[i][2] || !(chunkIds[i][0] >= chunkBoundaries[0][0] && chunkIds[i][0] <= chunkBoundaries[0][1] && chunkIds[i][1] >= chunkBoundaries[1][0] && chunkIds[i][1] <= chunkBoundaries[1][1]))
+			auto currentChunk = &chunkInfoArray[i];
+			if (!(currentChunk->pos.x >= chunkBoundaries[0][0] && currentChunk->pos.x <= chunkBoundaries[0][1] && currentChunk->pos.y >= chunkBoundaries[1][0] && currentChunk->pos.y <= chunkBoundaries[1][1]))
 			{
-				glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
-				ChunkVerticiesMutex.lock();
-				int vectorSize = newVerticies.size();
-				if (vectorSize > 0 && VBOuploads < GPUchunkUploadLimit)
+				currentChunk->enabled = false;
+			}
+			if (!currentChunk->enabled)
+			{
+				if (acceptedLoadedChunkVerticies.size() > 0 && VBOuploads < GPUchunkUploadLimit)
 				{
-					// glEnableVertexArray(vboChunks[i]);
-					auto newChunkInfo = newVerticies[vectorSize - 1];
-					newVerticies.pop_back();
-					if (newChunkInfo.first[0] >= chunkBoundaries[0][0] && newChunkInfo.first[0] <= chunkBoundaries[0][1] && newChunkInfo.first[1] >= chunkBoundaries[1][0] && newChunkInfo.first[1] <= chunkBoundaries[1][1])
+					glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
+					for (auto const& chunk : acceptedLoadedChunkVerticies)
 					{
 						VBOuploads++;
-						chunkIds[i][2] = true;
-						chunkIds[i][0] = newChunkInfo.first[0];
-						chunkIds[i][1] = newChunkInfo.first[1];
+						currentChunk->enabled = true;
+						currentChunk->pos.x = chunk.first[0];
+						currentChunk->pos.y = chunk.first[1];
 
-						glBufferData(GL_ARRAY_BUFFER, sizeof(float) * newChunkInfo.second.size(), newChunkInfo.second.data(), GL_DYNAMIC_DRAW);
-						chunkVetexSizes[i] = newChunkInfo.second.size() / 6;
+						glBufferData(GL_ARRAY_BUFFER, sizeof(float) * chunk.second.size(), chunk.second.data(), GL_DYNAMIC_DRAW);
+						chunkVetexSizes[i] = chunk.second.size() / 6;
+						acceptedLoadedChunkVerticies.erase(chunk.first);
+						break;
 					}
 				}
-				ChunkVerticiesMutex.unlock();
 			}
-			if (chunkIds[i][2])
+			if (currentChunk->enabled)
 			{
 				glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
+				if (acceptedUpdatedChunkVerticies.size() > 0)
+					for (auto const& chunk : acceptedUpdatedChunkVerticies)
+					{
+						if (chunk.first[0] == currentChunk->pos.x && chunk.first[1] == currentChunk->pos.y)
+						{
+							glBufferData(GL_ARRAY_BUFFER, sizeof(float) * chunk.second.size(), chunk.second.data(), GL_DYNAMIC_DRAW);
+							chunkVetexSizes[i] = chunk.second.size() / 6;
+							// acceptedUpdatedChunkVerticies.erase(chunk.first);
+							break;
+						}
+					}
 				specifySceneVertexAttributes(sceneShaderProgram);
 				glDrawArrays(GL_TRIANGLES, 0, chunkVetexSizes[i]);
 			}
@@ -441,7 +480,7 @@ void renderingThread(sf::Window* window)
 
 	glDeleteVertexArrays(1, &vaoWorld);
 
-	newVerticies.clear();
+	loadedChunkVerticies.clear();
 
 	glDeleteBuffers(1, &vboQuad);
 
@@ -508,15 +547,15 @@ void chunkGenThread()
 					if (!chunkPointers[idxX][idxY]->hasVerticies)
 					{
 						std::vector<GLfloat> newChunkVerticies = chunkPointers[idxX][idxY]->genVerticies(chunkPointers[idxX + 1][idxY], chunkPointers[idxX - 1][idxY], chunkPointers[idxX][idxY + 1], chunkPointers[idxX][idxY - 1]);
-						ChunkVerticiesMutex.lock();
-						newVerticies.push_back(std::make_pair(std::array<int, 2>({ idxX - chunkOffsets[0], idxY - chunkOffsets[1] }), newChunkVerticies));
-						ChunkVerticiesMutex.unlock();
+						loadedChunkVerticiesMultex.lock();
+						loadedChunkVerticies[std::array<int, 2>({ idxX - chunkOffsets[0], idxY - chunkOffsets[1] })] = newChunkVerticies;
+						loadedChunkVerticiesMultex.unlock();
 					}
 					else if (idxX - chunkOffsets[0] < previousChunkConstraints[0][0] || idxX - chunkOffsets[0] > previousChunkConstraints[0][1] || idxY - chunkOffsets[1] < previousChunkConstraints[1][0] || idxY - chunkOffsets[1] > previousChunkConstraints[1][1])
 					{
-						ChunkVerticiesMutex.lock();
-						newVerticies.push_back(std::make_pair(std::array<int, 2>({ idxX - chunkOffsets[0], idxY - chunkOffsets[1] }), chunkPointers[idxX][idxY]->savedVerticies));
-						ChunkVerticiesMutex.unlock();
+						loadedChunkVerticiesMultex.lock();
+						loadedChunkVerticies[std::array<int, 2>({ idxX - chunkOffsets[0], idxY - chunkOffsets[1] })] = chunkPointers[idxX][idxY]->savedVerticies;
+						loadedChunkVerticiesMultex.unlock();
 					}
 				}
 			}
@@ -612,38 +651,25 @@ bool pointIsAir(float x, float y, float z)
 void updateChunks(int blockX, int blockY, GameChunk* collidedChunk);
 void updateChunks(int blockX, int blockY, GameChunk* collidedChunk)
 {
-	ChunkVerticiesMutex.lock();
-	updateChunkMultex.lock();
-	updateChunkCoords.clear();
-	newVerticies.clear();
-	updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY }));
-	newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY }), collidedChunk->genVerticies(&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY - 1])));
+	updatedChunkVerticiesMultex.lock();
+	updatedChunkVerticies[std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY })] = collidedChunk->genVerticies(&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY - 1]);
 	if (blockX == 0)
-	{
 		// Update chunk -1 X
-		updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX - 1, collidedChunk->chunkY }));
-		newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX - 1, collidedChunk->chunkY }), (&chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY])->genVerticies(&chunkMap[collidedChunk->chunkX][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX - 2][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY - 1])));
-	}
+		updatedChunkVerticies[std::array<int, 2>({ collidedChunk->chunkX - 1, collidedChunk->chunkY })] = (&chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY])->genVerticies(&chunkMap[collidedChunk->chunkX][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX - 2][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY - 1]);
+
 	else if (blockX == 15)
-	{
 		// Update chunk +1 X
-		updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX + 1, collidedChunk->chunkY }));
-		newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX + 1, collidedChunk->chunkY }), (&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY])->genVerticies(&chunkMap[collidedChunk->chunkX + 2][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY - 1])));
-	}
+		updatedChunkVerticies[std::array<int, 2>({ collidedChunk->chunkX + 1, collidedChunk->chunkY })] = (&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY])->genVerticies(&chunkMap[collidedChunk->chunkX + 2][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY - 1]);
+
 	if (blockY == 0)
-	{
 		// Update chunk -1 Y
-		updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY - 1 }));
-		newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY - 1 }), (&chunkMap[collidedChunk->chunkX][collidedChunk->chunkY - 1])->genVerticies(&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY - 1], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY - 1], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY - 2])));
-	}
+		updatedChunkVerticies[std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY - 1 })] = (&chunkMap[collidedChunk->chunkX][collidedChunk->chunkY - 1])->genVerticies(&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY - 1], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY - 1], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY - 2]);
+
 	else if (blockY == 15)
-	{
 		// Update chunk +1 Y
-		updateChunkCoords.push_back(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY + 1 }));
-		newVerticies.push_back(std::make_pair(std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY + 1 }), (&chunkMap[collidedChunk->chunkX][collidedChunk->chunkY + 1])->genVerticies(&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY + 2], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY])));
-	}
-	updateChunkMultex.unlock();
-	ChunkVerticiesMutex.unlock();
+		updatedChunkVerticies[std::array<int, 2>({ collidedChunk->chunkX, collidedChunk->chunkY + 1 })] = (&chunkMap[collidedChunk->chunkX][collidedChunk->chunkY + 1])->genVerticies(&chunkMap[collidedChunk->chunkX + 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX - 1][collidedChunk->chunkY + 1], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY + 2], &chunkMap[collidedChunk->chunkX][collidedChunk->chunkY]);
+
+	updatedChunkVerticiesMultex.unlock();
 }
 
 struct collisionPoint
@@ -671,9 +697,9 @@ std::pair<bool, collisionPoint> rayCollision(Vector3f currentPosition, Vector3f 
 	int originBlock[3] = { (int)floor((int)floor(currentPosition.x + 0.5f)), (int)floor((int)floor(currentPosition.y + 0.5f)), (int)floor(currentPosition.z + 0.5f) };
 	const int rayNormalised[3] = { (int)round(rayDirection.x / std::abs(rayDirection.x)), (int)round(rayDirection.y / std::abs(rayDirection.y)), (int)round(rayDirection.z / std::abs(rayDirection.z)) };
 
-	int x = originBlock[0];
-	int y = originBlock[1];
-	int z = originBlock[2];
+	int x = originBlock[0] + rayNormalised[0];
+	int y = originBlock[1] + rayNormalised[1];
+	int z = originBlock[2] + rayNormalised[2];
 
 	float scaleX = (((float)x + (-0.5f * (float)rayNormalised[0])) - currentPosition.x) / rayDirection.x;
 	float scaleY = (((float)y + (-0.5f * (float)rayNormalised[1])) - currentPosition.y) / rayDirection.y;

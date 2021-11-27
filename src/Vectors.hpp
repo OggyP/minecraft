@@ -108,6 +108,12 @@ struct normalVector3i
 	int z = 0;
 };
 
+struct normalVector2i
+{
+	int x = 0;
+	int y = 0;
+};
+
 class Vector2f
 {
 public:
