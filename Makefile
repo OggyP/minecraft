@@ -415,7 +415,11 @@ else ifeq ($(PLATFORM),linux)
 	$(_Q)sed -i 's/^Icon=.*/Icon=$(_LINUX_GREP_CWD)\/$(PRODUCTION_FOLDER)\/$(PRODUCTION_LINUX_ICON).png/' "$(PRODUCTION_FOLDER)/$(NAME).desktop"
 	$(_Q)chmod +x "$(PRODUCTION_FOLDER)/$(NAME)"
 	$(_Q)chmod +x "$(PRODUCTION_FOLDER)/$(NAME).desktop"
+ifeq ("$(wildcard ~/.local/share/applications)", "")
+	@printf '   Directory does not exist.\n'
+else
 	$(_Q)cp "$(PRODUCTION_FOLDER)/$(NAME).desktop" ~/.local/share/applications
+endif
 else
 	$(_Q)cp $(TARGET) "$(PRODUCTION_FOLDER)"
 	$(if $(_CLEAN),,@printf '\n')
