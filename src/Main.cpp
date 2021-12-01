@@ -150,6 +150,7 @@ const GLchar* screenFragmentSource = R"glsl(
 struct chunkRenderInfo
 {
 	bool enabled = false;
+	bool hasBeenLoaded = false;
 	bool updated = false;
 	normalVector2i pos;
 };
@@ -210,8 +211,6 @@ void renderingThread(sf::Window* window)
 	}
 	// End load image
 
-	glUseProgram(sceneShaderProgram);
-	glUniform1i(glGetUniformLocation(sceneShaderProgram, "texCat"), 0);
 	// Create framebuffer ==============================================================================================
 	////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	GLuint screenVertexShader, screenFragmentShader, screenShaderProgram;
@@ -220,9 +219,6 @@ void renderingThread(sf::Window* window)
 	glBindVertexArray(vaoQuad);
 	glBindBuffer(GL_ARRAY_BUFFER, vboQuad);
 	specifyScreenVertexAttributes(screenShaderProgram);
-
-	glUseProgram(screenShaderProgram);
-	glUniform1i(glGetUniformLocation(screenShaderProgram, "blockTexture"), 0);
 
 	GLuint frameBuffer;
 	glGenFramebuffers(1, &frameBuffer);
@@ -307,7 +303,7 @@ void renderingThread(sf::Window* window)
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 		// Bind our framebuffer and draw 3D scene (spinning cube)
 
-		glActiveTexture(GL_TEXTURE0);
+		// glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, blockTexture);
 
 		glBindVertexArray(vaoWorld);
@@ -390,6 +386,10 @@ void renderingThread(sf::Window* window)
 			{
 				currentChunk->enabled = false;
 			}
+			else if (currentChunk->hasBeenLoaded)
+			{
+				currentChunk->enabled = true;
+			}
 			if (!currentChunk->enabled)
 			{
 				if (acceptedLoadedChunkVerticies.size() > 0 && VBOuploads < GPUchunkUploadLimit)
@@ -399,6 +399,7 @@ void renderingThread(sf::Window* window)
 					{
 						VBOuploads++;
 						currentChunk->enabled = true;
+						currentChunk->hasBeenLoaded = true;
 						currentChunk->pos.x = chunk.first[0];
 						currentChunk->pos.y = chunk.first[1];
 

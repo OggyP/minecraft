@@ -20,6 +20,7 @@ PRODUCTION_FOLDER := build
 
 PRODUCTION_EXCLUDE := \
 	*.psd \
+	*.xcf \
 	*.rar \
 	*.7z \
 	Thumbs.db \

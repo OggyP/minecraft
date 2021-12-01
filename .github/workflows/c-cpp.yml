@@ -1,4 +1,4 @@
-name: C/C++ Make Using Build Script
+name: Build Production Release
 
 on:
   push:
