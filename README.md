@@ -10,7 +10,7 @@ This is a bad Minecraft clone and my first OpenGL application I have made that w
 The controls are the same as Minecraft's controls.
 
 * Use the mouse to look around.
-* `W``A``S``D` to move around.
+* `W` `A` `S` `D` to move around.
 * `Space` to jump
 * `C` to toggle flying
 * `Left click` to remove blocks
