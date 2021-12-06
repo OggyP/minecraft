@@ -39,10 +39,15 @@ bool gameRunning = true;
 bool windowHasFocus = true;
 
 // render distance in chunks
+#if defined(_DEBUG)
 const int renderDistance = 5;
+#else
+const int renderDistance = 12;
+#endif
+
 const int chunksAmt = (2 * renderDistance + 1);
 
-float blockScale = 0.1;
+const float maxViewDistance = (float)((renderDistance - 1) * chunkSize);
 
 const int GPUchunkUploadLimit = 10000000;
 
@@ -82,11 +87,10 @@ const GLchar* sceneVertexSource = R"glsl(
 	uniform mat4 model;
 	uniform mat4 view;
 	uniform mat4 proj;
-	uniform float scale;
 
     void main()
     {
-		vec4 newPos = vec4((position * scale) - playerPosition, 1.0);
+		vec4 newPos = vec4((position) - playerPosition, 1.0);
         gl_Position =  proj * view * model * newPos;
         texCoord = texcoord;
 		Brightness = brightness;
@@ -106,13 +110,16 @@ const GLchar* sceneFragmentSource = R"glsl(
 	uniform sampler2D blockTexture;
 	uniform bool showFog;
 
+	uniform float fogStartDistanceSqr;
+	uniform float fogStopDistanceSqr;
+
     void main()
     {
-		if (!showFog || distanceFromPlayer < 45) {
+		if (!showFog || distanceFromPlayer < fogStartDistanceSqr) {
         	outColor = texture(blockTexture, texCoord) * Brightness;
 		}
-		else if (distanceFromPlayer < 90) {
-			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - 45) / 45);
+		else if (distanceFromPlayer < fogStopDistanceSqr) {
+			outColor = mix(texture(blockTexture, texCoord) * Brightness, vec4(0.450, 0.937, 0.968, 1), (distanceFromPlayer - fogStartDistanceSqr) / (fogStopDistanceSqr - fogStartDistanceSqr));
 		} else {
 			outColor = vec4(0.450, 0.937, 0.968, 1.0);
 		}
@@ -250,7 +257,7 @@ void renderingThread(sf::Window* window)
 
 	GLint uniView = glGetUniformLocation(sceneShaderProgram, "view");
 
-	glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)screenSize[0] / screenSize[1], 0.001f, 9.0f);
+	glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)screenSize[0] / screenSize[1], 0.001f, maxViewDistance);
 	GLint uniProj = glGetUniformLocation(sceneShaderProgram, "proj");
 	glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
 
@@ -258,10 +265,13 @@ void renderingThread(sf::Window* window)
 	glm::mat4 model = glm::mat4(0.1f);
 	glUniformMatrix4fv(uniModel, 1, GL_FALSE, glm::value_ptr(model));
 
-	glUniform1f(glGetUniformLocation(sceneShaderProgram, "scale"), blockScale);
-
 	GLint uniPlayerPosition = glGetUniformLocation(sceneShaderProgram, "playerPosition");
 	GLint uniShowFog = glGetUniformLocation(sceneShaderProgram, "showFog");
+
+	GLint uniFogStartDistSqr = glGetUniformLocation(sceneShaderProgram, "fogStartDistanceSqr");
+	GLint uniFogStopDistSqr = glGetUniformLocation(sceneShaderProgram, "fogStopDistanceSqr");
+	glUniform1f(uniFogStartDistSqr, pow((float)((renderDistance - 3) * chunkSize), 2));
+	glUniform1f(uniFogStopDistSqr, pow(maxViewDistance, 2));
 
 	glEnable(GL_CULL_FACE);
 	glCullFace(GL_FRONT);
@@ -318,9 +328,7 @@ void renderingThread(sf::Window* window)
 			glUniform1ui(uniShowFog, showFog);
 		}
 
-		float scaledPlayerPos[3] = { position.x * blockScale, position.y * blockScale, position.z * blockScale };
-
-		glUniform3f(uniPlayerPosition, scaledPlayerPos[0], scaledPlayerPos[1], scaledPlayerPos[2]);
+		glUniform3f(uniPlayerPosition, position.x, position.y, position.z);
 
 		glm::mat4 view = glm::lookAt(
 			glm::vec3(0, 0, 0),
@@ -381,16 +389,16 @@ void renderingThread(sf::Window* window)
 
 		for (int i = 0; i < chunksAmt * chunksAmt; i++)
 		{
-			auto currentChunk = &chunkInfoArray[i];
-			if (!(currentChunk->pos.x >= chunkBoundaries[0][0] && currentChunk->pos.x <= chunkBoundaries[0][1] && currentChunk->pos.y >= chunkBoundaries[1][0] && currentChunk->pos.y <= chunkBoundaries[1][1]))
+			auto currentRenderChunk = &chunkInfoArray[i];
+			if (!(currentRenderChunk->pos.x >= chunkBoundaries[0][0] && currentRenderChunk->pos.x <= chunkBoundaries[0][1] && currentRenderChunk->pos.y >= chunkBoundaries[1][0] && currentRenderChunk->pos.y <= chunkBoundaries[1][1]))
 			{
-				currentChunk->enabled = false;
+				currentRenderChunk->enabled = false;
 			}
-			else if (currentChunk->hasBeenLoaded)
+			else if (currentRenderChunk->hasBeenLoaded)
 			{
-				currentChunk->enabled = true;
+				currentRenderChunk->enabled = true;
 			}
-			if (!currentChunk->enabled)
+			if (!currentRenderChunk->enabled)
 			{
 				if (acceptedLoadedChunkVerticies.size() > 0 && VBOuploads < GPUchunkUploadLimit)
 				{
@@ -398,10 +406,10 @@ void renderingThread(sf::Window* window)
 					for (auto const& chunk : acceptedLoadedChunkVerticies)
 					{
 						VBOuploads++;
-						currentChunk->enabled = true;
-						currentChunk->hasBeenLoaded = true;
-						currentChunk->pos.x = chunk.first[0];
-						currentChunk->pos.y = chunk.first[1];
+						currentRenderChunk->enabled = true;
+						currentRenderChunk->hasBeenLoaded = true;
+						currentRenderChunk->pos.x = chunk.first[0];
+						currentRenderChunk->pos.y = chunk.first[1];
 
 						glBufferData(GL_ARRAY_BUFFER, sizeof(float) * chunk.second.size(), chunk.second.data(), GL_DYNAMIC_DRAW);
 						chunkVetexSizes[i] = chunk.second.size() / 6;
@@ -410,22 +418,36 @@ void renderingThread(sf::Window* window)
 					}
 				}
 			}
-			if (currentChunk->enabled)
+			if (currentRenderChunk->enabled)
 			{
-				glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
-				if (acceptedUpdatedChunkVerticies.size() > 0)
-					for (auto const& chunk : acceptedUpdatedChunkVerticies)
-					{
-						if (chunk.first[0] == currentChunk->pos.x && chunk.first[1] == currentChunk->pos.y)
+				bool renderCurrentChunk = true;
+				// for (int x = 0; x <= chunkSize; x += chunkSize)
+				// 	for (int y = 0; y <= chunkSize; y += chunkSize)
+				// 		for (int z = 0; z <= chunkHeight; z += chunkHeight)
+				// 		{
+				// 			normalVector3i point;
+				// 			point.x = currentRenderChunk->pos.x * chunkSize + x;
+				// 			point.y = currentRenderChunk->pos.y * chunkSize + y;
+				// 			point.z = z;
+				// 			Vector3f vectorToPoint(point.x - position.x, point.y - position.y, point.z - position.z);
+				// 		}
+				if (renderCurrentChunk)
+				{
+					glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
+					if (acceptedUpdatedChunkVerticies.size() > 0)
+						for (auto const& chunk : acceptedUpdatedChunkVerticies)
 						{
-							glBufferData(GL_ARRAY_BUFFER, sizeof(float) * chunk.second.size(), chunk.second.data(), GL_DYNAMIC_DRAW);
-							chunkVetexSizes[i] = chunk.second.size() / 6;
-							// acceptedUpdatedChunkVerticies.erase(chunk.first);
-							break;
+							if (chunk.first[0] == currentRenderChunk->pos.x && chunk.first[1] == currentRenderChunk->pos.y)
+							{
+								glBufferData(GL_ARRAY_BUFFER, sizeof(float) * chunk.second.size(), chunk.second.data(), GL_DYNAMIC_DRAW);
+								chunkVetexSizes[i] = chunk.second.size() / 6;
+								// acceptedUpdatedChunkVerticies.erase(chunk.first);
+								break;
+							}
 						}
-					}
-				specifySceneVertexAttributes(sceneShaderProgram);
-				glDrawArrays(GL_TRIANGLES, 0, chunkVetexSizes[i]);
+					specifySceneVertexAttributes(sceneShaderProgram);
+					glDrawArrays(GL_TRIANGLES, 0, chunkVetexSizes[i]);
+				}
 			}
 		}
 
