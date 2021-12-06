@@ -24,6 +24,31 @@
 // # define M_SQRT2	1.41421356237309504880	/* sqrt(2) */
 // # define M_SQRT1_2	0.70710678118654752440	/* 1/sqrt(2) */
 
+/**
+ * Get Angle Difference
+ *
+ * All in radians
+ *
+ * @param[in] angle1 &float angle 1 (-PI to PI)
+ * @param[in] angle2 &float angle 2 (-PI to PI)
+ *
+ * @return Float value of the angle difference from -PI to PI
+ */
+float angleDiff(float& angle1, float& angle2);
+float angleDiff(float& angle1, float& angle2)
+{
+	float angleDiff = angle1 - angle2;
+	if (angleDiff < -M_PI)
+		angleDiff = 2 * M_PI + angleDiff;
+	if (angleDiff > M_PI)
+		angleDiff = -2 * M_PI + angleDiff;
+	return angleDiff;
+}
+
+#define FOV 70.0f
+#define FOV_CULLING 55.0f
+#define FOV_2 35.0f
+
 bool screenResize = false;
 #if defined(_DEBUG)
 int screenSize[2] = { 1000, 1000 };
@@ -48,6 +73,7 @@ const int renderDistance = 12;
 const int chunksAmt = (2 * renderDistance + 1);
 
 const float maxViewDistance = (float)((renderDistance - 1) * chunkSize);
+const float h = maxViewDistance / std::cos(glm::radians(FOV_CULLING));
 
 const int GPUchunkUploadLimit = 10000000;
 
@@ -257,7 +283,7 @@ void renderingThread(sf::Window* window)
 
 	GLint uniView = glGetUniformLocation(sceneShaderProgram, "view");
 
-	glm::mat4 proj = glm::perspective(glm::radians(70.0f), (float)screenSize[0] / screenSize[1], 0.001f, maxViewDistance);
+	glm::mat4 proj = glm::perspective(glm::radians(FOV), (float)screenSize[0] / screenSize[1], 0.001f, maxViewDistance);
 	GLint uniProj = glGetUniformLocation(sceneShaderProgram, "proj");
 	glUniformMatrix4fv(uniProj, 1, GL_FALSE, glm::value_ptr(proj));
 
@@ -387,6 +413,14 @@ void renderingThread(sf::Window* window)
 		updatedChunkVerticies.clear();
 		updatedChunkVerticiesMultex.unlock();
 
+		lookingAt.updateDirection();
+		float a = (maxViewDistance * std::sin(lookingAt.directionV)) / (std::tan(M_PI_2 - lookingAt.directionV));
+		float b = maxViewDistance * std::cos(lookingAt.directionV);
+		float l = std::sqrt((h * h) - (b * b));
+		const float FOVtoCheck = atan2(l, b - a);
+		// std::cout << "FOV To Check: " << FOVtoCheck << "\n";
+		// std::cout << "Direction V" << lookingAt.directionV << "\n";
+
 		for (int i = 0; i < chunksAmt * chunksAmt; i++)
 		{
 			auto currentRenderChunk = &chunkInfoArray[i];
@@ -420,17 +454,63 @@ void renderingThread(sf::Window* window)
 			}
 			if (currentRenderChunk->enabled)
 			{
-				bool renderCurrentChunk = true;
-				// for (int x = 0; x <= chunkSize; x += chunkSize)
-				// 	for (int y = 0; y <= chunkSize; y += chunkSize)
-				// 		for (int z = 0; z <= chunkHeight; z += chunkHeight)
-				// 		{
-				// 			normalVector3i point;
-				// 			point.x = currentRenderChunk->pos.x * chunkSize + x;
-				// 			point.y = currentRenderChunk->pos.y * chunkSize + y;
-				// 			point.z = z;
-				// 			Vector3f vectorToPoint(point.x - position.x, point.y - position.y, point.z - position.z);
-				// 		}
+				bool angleDiffPos;
+				bool firstChunkCheck = true;
+				bool renderCurrentChunk = false;
+				for (int x = 0; x <= chunkSize; x += chunkSize)
+					for (int y = 0; y <= chunkSize; y += chunkSize)
+					{
+						bool isAboveV = false;
+						for (int z = 0; z <= chunkHeight; z += chunkHeight)
+						{
+							normalVector3i point;
+							point.x = currentRenderChunk->pos.x * chunkSize + x;
+							point.y = currentRenderChunk->pos.y * chunkSize + y;
+							point.z = z;
+							Vector3f vectorToPoint(point.x - position.x, point.y - position.y, point.z - position.z);
+							vectorToPoint.updateDirection();
+							float angleDiffH = angleDiff(lookingAt.directionH, vectorToPoint.directionH);
+							if (angleDiffH)
+								if (std::abs(angleDiffH) <= FOVtoCheck)
+								{
+									float angleDiffV = angleDiff(lookingAt.directionV, vectorToPoint.directionV);
+									if (std::abs(angleDiffV) <= FOVtoCheck)
+									{
+										renderCurrentChunk = true;
+										goto endOnScreenCheck;
+									}
+									else
+									{
+										if (!z)
+										{
+											isAboveV = (angleDiffV > 0);
+										}
+										else
+										{
+											if (isAboveV != (angleDiffV > 0))
+											{
+												renderCurrentChunk = true;
+												goto endOnScreenCheck;
+											}
+										}
+									}
+								}
+							if (firstChunkCheck)
+							{
+								angleDiffPos = (angleDiffH > 0);
+							}
+							else
+							{
+								if (angleDiffPos != (angleDiffH > 0))
+								{
+									renderCurrentChunk = true;
+									goto endOnScreenCheck;
+								}
+								angleDiffPos = (angleDiffH > 0);
+							}
+						}
+					}
+			endOnScreenCheck:
 				if (renderCurrentChunk)
 				{
 					glBindBuffer(GL_ARRAY_BUFFER, vboChunks[i]);
