@@ -46,8 +46,9 @@ float angleDiff(float& angle1, float& angle2)
 }
 
 #define FOV 70.0f
-#define FOV_CULLING 55.0f
-#define FOV_2 35.0f
+
+const float FOV_RADIANS = glm::radians(FOV);
+const float FOV_RADIANS_2 = glm::radians(FOV / 2);
 
 bool screenResize = false;
 #if defined(_DEBUG)
@@ -71,10 +72,6 @@ const int renderDistance = 12;
 #endif
 
 const int chunksAmt = (2 * renderDistance + 1);
-
-const float maxViewDistance = (float)((renderDistance - 1) * chunkSize);
-const float h = maxViewDistance / std::cos(glm::radians(FOV_CULLING));
-
 const int GPUchunkUploadLimit = 10000000;
 
 bool spawnChunksLoaded = false;
@@ -194,6 +191,12 @@ void renderingThread(sf::Window* window)
 	// activate the window's context
 	window->setActive(true);
 
+	const float checkFOV_2 = FOV_RADIANS_2 * ((float)std::max(window->getSize().x, window->getSize().y) / (float)std::min(window->getSize().x, window->getSize().y));
+	const float maxViewDistance = (float)((renderDistance - 1) * chunkSize);
+	const float h = maxViewDistance / std::cos(checkFOV_2);
+	std::cout << "Init FOV = " << FOV_RADIANS_2 << "\n"
+			  << "New FOV = " << checkFOV_2 << "\n";
+
 	// GLEW stuff
 	glewExperimental = GL_TRUE;
 	glewInit();
@@ -306,12 +309,9 @@ void renderingThread(sf::Window* window)
 	std::array<chunkRenderInfo, chunksAmt * chunksAmt> chunkInfoArray;
 	int chunkVetexSizes[chunksAmt * chunksAmt];
 
-#if defined(_DEBUG)
-	// the rendering loop
 	int totalFrameCount = 0;
 	auto startTime = std::chrono::high_resolution_clock::now();
 	bool logFPStoConsole = false;
-#endif
 
 	bool showFog = true;
 
@@ -319,13 +319,11 @@ void renderingThread(sf::Window* window)
 
 	while (gameRunning)
 	{
-#if defined(_DEBUG)
 		if (spawnChunksLoaded && !logFPStoConsole)
 		{
 			startTime = std::chrono::high_resolution_clock::now();
 			logFPStoConsole = true;
 		}
-#endif
 
 		if (screenResize)
 		{
@@ -418,6 +416,7 @@ void renderingThread(sf::Window* window)
 		float b = maxViewDistance * std::cos(lookingAt.directionV);
 		float l = std::sqrt((h * h) - (b * b));
 		const float FOVtoCheck = atan2(l, b - a);
+		// UNUSED(FOVtoCheck);
 		// std::cout << "FOV To Check: " << FOVtoCheck << "\n";
 		// std::cout << "Direction V" << lookingAt.directionV << "\n";
 
@@ -460,21 +459,24 @@ void renderingThread(sf::Window* window)
 				for (int x = 0; x <= chunkSize; x += chunkSize)
 					for (int y = 0; y <= chunkSize; y += chunkSize)
 					{
-						bool isAboveV = false;
-						for (int z = 0; z <= chunkHeight; z += chunkHeight)
-						{
-							normalVector3i point;
-							point.x = currentRenderChunk->pos.x * chunkSize + x;
-							point.y = currentRenderChunk->pos.y * chunkSize + y;
-							point.z = z;
-							Vector3f vectorToPoint(point.x - position.x, point.y - position.y, point.z - position.z);
-							vectorToPoint.updateDirection();
-							float angleDiffH = angleDiff(lookingAt.directionH, vectorToPoint.directionH);
-							if (angleDiffH)
-								if (std::abs(angleDiffH) <= FOVtoCheck)
+						normalVector3i point;
+						point.x = currentRenderChunk->pos.x * chunkSize + x;
+						point.y = currentRenderChunk->pos.y * chunkSize + y;
+						point.z = 0;
+						Vector3f vectorToPoint(point.x - position.x, point.y - position.y, point.z - position.z);
+						vectorToPoint.updateDirection('H');
+						float angleDiffH = angleDiff(lookingAt.directionH, vectorToPoint.directionH);
+						if (angleDiffH)
+							if (std::abs(angleDiffH) <= FOVtoCheck)
+							{
+								bool isAboveV = false;
+								for (int z = 0; z <= chunkHeight; z += chunkHeight)
 								{
+									point.z = z;
+									vectorToPoint.z = point.z - position.z;
+									vectorToPoint.updateDirection('V');
 									float angleDiffV = angleDiff(lookingAt.directionV, vectorToPoint.directionV);
-									if (std::abs(angleDiffV) <= FOVtoCheck)
+									if (std::abs(angleDiffV) <= FOV_RADIANS_2)
 									{
 										renderCurrentChunk = true;
 										goto endOnScreenCheck;
@@ -495,19 +497,19 @@ void renderingThread(sf::Window* window)
 										}
 									}
 								}
-							if (firstChunkCheck)
-							{
-								angleDiffPos = (angleDiffH > 0);
 							}
-							else
+						if (firstChunkCheck)
+						{
+							angleDiffPos = (angleDiffH > 0);
+						}
+						else
+						{
+							if (angleDiffPos != (angleDiffH > 0))
 							{
-								if (angleDiffPos != (angleDiffH > 0))
-								{
-									renderCurrentChunk = true;
-									goto endOnScreenCheck;
-								}
-								angleDiffPos = (angleDiffH > 0);
+								renderCurrentChunk = true;
+								goto endOnScreenCheck;
 							}
+							angleDiffPos = (angleDiffH > 0);
 						}
 					}
 			endOnScreenCheck:
@@ -544,7 +546,6 @@ void renderingThread(sf::Window* window)
 
 		// end the current frame -- this is a rendering function (it requires the context to be active)
 		window->display();
-#if defined(_DEBUG)
 		if (logFPStoConsole)
 		{
 			totalFrameCount++;
@@ -558,7 +559,6 @@ void renderingThread(sf::Window* window)
 				totalFrameCount = 0;
 			}
 		}
-#endif
 	}
 
 	// close
@@ -945,6 +945,10 @@ int main()
 	// Handle all input
 	sf::Clock deltaClock;
 	sf::Event event;
+
+	int totalTickCount = 0;
+	auto startTime = std::chrono::high_resolution_clock::now();
+
 	while (gameRunning)
 	{
 		sf::Time dt = deltaClock.restart();
@@ -1100,32 +1104,34 @@ int main()
 
 			Vector2f wantToMove;
 
+			float DTwantToMoveSpeed = (float)dt.asMicroseconds() / 200.0f;
+
 			// XY Movement
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::W))
 			{
-				wantToMove.x += cos(wantToLook.directionH);
-				wantToMove.y += sin(wantToLook.directionH);
+				wantToMove.x += cos(wantToLook.directionH) * DTwantToMoveSpeed;
+				wantToMove.y += sin(wantToLook.directionH) * DTwantToMoveSpeed;
 			}
 			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::S))
 			{
-				wantToMove.x += -cos(wantToLook.directionH);
-				wantToMove.y += -sin(wantToLook.directionH);
+				wantToMove.x += -cos(wantToLook.directionH) * DTwantToMoveSpeed;
+				wantToMove.y += -sin(wantToLook.directionH) * DTwantToMoveSpeed;
 			}
 			if (sf::Keyboard::isKeyPressed(sf::Keyboard::A))
 			{
-				wantToMove.x += cos(wantToLook.directionH + M_PI_2);
-				wantToMove.y += sin(wantToLook.directionH + M_PI_2);
+				wantToMove.x += cos(wantToLook.directionH + M_PI_2) * DTwantToMoveSpeed;
+				wantToMove.y += sin(wantToLook.directionH + M_PI_2) * DTwantToMoveSpeed;
 			}
 			else if (sf::Keyboard::isKeyPressed(sf::Keyboard::D))
 			{
-				wantToMove.x += -cos(wantToLook.directionH + M_PI_2);
-				wantToMove.y += -sin(wantToLook.directionH + M_PI_2);
+				wantToMove.x += -cos(wantToLook.directionH + M_PI_2) * DTwantToMoveSpeed;
+				wantToMove.y += -sin(wantToLook.directionH + M_PI_2) * DTwantToMoveSpeed;
 			}
 
 			// Flying and jumping
 			if (!flying)
 			{
-				movementVector.z -= gravity * dt.asMilliseconds();
+				movementVector.z -= gravity * (float)dt.asMicroseconds() / 1000.0f;
 				if (onFloor && sf::Keyboard::isKeyPressed(sf::Keyboard::Space))
 				{
 					auto now = std::chrono::high_resolution_clock::now();
@@ -1223,8 +1229,17 @@ int main()
 						}
 					}
 				}
-
-			sf::sleep(sf::milliseconds(1));
+		}
+		sf::sleep(sf::milliseconds(1));
+		totalTickCount++;
+		auto now = std::chrono::high_resolution_clock::now();
+		float timeDiff = std::chrono::duration_cast<std::chrono::duration<float>>(now - startTime).count();
+		UNUSED(timeDiff);
+		// std::cout << "Ticks: " << totalTickCount / timeDiff << "\n";
+		if (timeDiff > 0.5f)
+		{
+			startTime = std::chrono::high_resolution_clock::now();
+			totalTickCount = 0;
 		}
 	}
 

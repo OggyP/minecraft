@@ -83,6 +83,18 @@ public:
 		directionV = atan2(z, getMagnitudeXY());
 	}
 
+	void updateDirection(char direction)
+	{
+		if (direction == 'H')
+		{
+			directionH = atan2(y, x);
+		}
+		else
+		{
+			directionV = atan2(z, getMagnitudeXY());
+		}
+	}
+
 	void normalise(float magnitude)
 	{
 		updateDirection();
