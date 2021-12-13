@@ -26,7 +26,7 @@ public:
 	// This will return the magnitude squared. Use this if you can as it will result faster performace.
 	float getMagnitudeSqr()
 	{
-		return (float)sqrt(x * x + y * y + z * z);
+		return x * x + y * y + z * z;
 	}
 
 	/**
@@ -60,7 +60,7 @@ public:
 	// This will return the magnitude of the X and Y values squared. Use this if you can as it will result faster performace.
 	float getMagnitudeXYSqr()
 	{
-		return (float)sqrt(x * x + y * y);
+		return (float)x * x + y * y;
 	}
 
 	std::array<float, 2> getDirection()
