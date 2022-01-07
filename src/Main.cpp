@@ -888,9 +888,9 @@ int main()
 	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft DEBUGGING MODE", sf::Style::Resize | sf::Style::Close, settings);
 #else
 	#if defined(__linux__)
-	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Resize | sf::Style::Fullscreen | sf::Style::Close, settings);
+	sf::Window window(sf::VideoMode(0, 0), "Bad Minecraft", sf::Style::Resize | sf::Style::Fullscreen | sf::Style::Close, settings);
 	#else
-	sf::Window window(sf::VideoMode(screenSize[0], screenSize[1]), "Bad Minecraft", sf::Style::Resize | sf::Style::Close, settings);
+	sf::Window window(sf::VideoMode(0, 0), "Bad Minecraft", sf::Style::Resize | sf::Style::Close, settings);
 	platform.toggleFullscreen(window.getSystemHandle(), sf::Style::Fullscreen, false, sf::Vector2u(sf::VideoMode::getDesktopMode().width, sf::VideoMode::getDesktopMode().height));
 	#endif
 #endif
